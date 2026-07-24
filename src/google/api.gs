@@ -633,10 +633,16 @@ function getDashboardData(data) {
         var lr = lData[k];
         var lUserId = String(lr[1] || "").trim();
         var lType = String(lr[2] || "").trim();
-        var lTimestamp = String(lr[3] || "");
-        if (lUserId.toLowerCase() === email.toLowerCase() && lTimestamp.indexOf(today) !== -1) {
-          if (lType === "Clock In" && !clockIn) clockIn = lTimestamp;
-          if (lType === "Clock Out") clockOut = lTimestamp;
+        var lTs = lr[3];
+        var lDateStr = "";
+        if (lTs instanceof Date) {
+          lDateStr = Utilities.formatDate(lTs, "Asia/Dhaka", "dd-MMM-yyyy");
+        } else {
+          lDateStr = String(lTs || "");
+        }
+        if (lUserId.toLowerCase() === email.toLowerCase() && lDateStr === today) {
+          if (lType === "Clock In" && !clockIn) clockIn = lTs instanceof Date ? Utilities.formatDate(lTs, "Asia/Dhaka", "hh:mm a") : String(lTs);
+          if (lType === "Clock Out") clockOut = lTs instanceof Date ? Utilities.formatDate(lTs, "Asia/Dhaka", "hh:mm a") : String(lTs);
         }
       }
     }
