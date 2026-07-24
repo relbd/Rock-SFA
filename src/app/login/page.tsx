@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Shield } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export default function Login() {
   const router = useRouter();
@@ -47,9 +47,11 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl gradient-primary flex items-center justify-center shadow-lg">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
+          <img
+            src="https://drive.google.com/uc?export=view&id=1nHBD_9M2pTs_fqXEYG-IoPtC1uCXt75l"
+            alt="Rock Energy Logo"
+            className="w-20 h-20 mx-auto mb-4 object-contain drop-shadow-lg"
+          />
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Rock SFA</h1>
           <p className="text-sm text-gray-500 mt-1">Sales Force Automation</p>
         </div>
