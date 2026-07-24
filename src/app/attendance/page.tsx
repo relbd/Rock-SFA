@@ -28,19 +28,19 @@ function AttendanceContent() {
   useEffect(function () {
     if (!user) return;
     const today = getTodayKey();
-    const storedDate = localStorage.getItem("attendance_date_" + user.userId);
+    const storedDate = localStorage.getItem("attendance_date_" + user.email);
     if (storedDate !== today) {
-      localStorage.removeItem("attendance_clockin_" + user.userId);
-      localStorage.removeItem("attendance_clockout_" + user.userId);
-      localStorage.removeItem("attendance_clockin_time_" + user.userId);
-      localStorage.removeItem("attendance_clockout_time_" + user.userId);
-      localStorage.setItem("attendance_date_" + user.userId, today);
+      localStorage.removeItem("attendance_clockin_" + user.email);
+      localStorage.removeItem("attendance_clockout_" + user.email);
+      localStorage.removeItem("attendance_clockin_time_" + user.email);
+      localStorage.removeItem("attendance_clockout_time_" + user.email);
+      localStorage.setItem("attendance_date_" + user.email, today);
       setClockInDone(false); setClockOutDone(false); setClockInTime(""); setClockOutTime("");
     } else {
-      setClockInDone(localStorage.getItem("attendance_clockin_" + user.userId) === "true");
-      setClockOutDone(localStorage.getItem("attendance_clockout_" + user.userId) === "true");
-      setClockInTime(localStorage.getItem("attendance_clockin_time_" + user.userId) || "");
-      setClockOutTime(localStorage.getItem("attendance_clockout_time_" + user.userId) || "");
+      setClockInDone(localStorage.getItem("attendance_clockin_" + user.email) === "true");
+      setClockOutDone(localStorage.getItem("attendance_clockout_" + user.email) === "true");
+      setClockInTime(localStorage.getItem("attendance_clockin_time_" + user.email) || "");
+      setClockOutTime(localStorage.getItem("attendance_clockout_time_" + user.email) || "");
     }
   }, [user]);
 
@@ -85,18 +85,18 @@ function AttendanceContent() {
       const loc = await getLocation();
       const lat = loc?.lat || 0; const lng = loc?.lng || 0;
       setGpsLat(lat); setGpsLng(lng);
-      const res = await api.clockIn(user.userId, lat, lng, selfieBase64 || undefined);
+      const res = await api.clockIn(user.email, lat, lng, selfieBase64 || undefined);
       if (res.success) {
         const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         setClockInDone(true); setClockInTime(time);
-        localStorage.setItem("attendance_clockin_" + user.userId, "true");
-        localStorage.setItem("attendance_clockin_time_" + user.userId, time);
+        localStorage.setItem("attendance_clockin_" + user.email, "true");
+        localStorage.setItem("attendance_clockin_time_" + user.email, time);
       }
     } catch {
       const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setClockInDone(true); setClockInTime(time);
-      localStorage.setItem("attendance_clockin_" + user.userId, "true");
-      localStorage.setItem("attendance_clockin_time_" + user.userId, time);
+      localStorage.setItem("attendance_clockin_" + user.email, "true");
+      localStorage.setItem("attendance_clockin_time_" + user.email, time);
     } finally { setClocking(false); }
   }
 
@@ -107,18 +107,18 @@ function AttendanceContent() {
       const loc = await getLocation();
       const lat = loc?.lat || 0; const lng = loc?.lng || 0;
       setGpsLat(lat); setGpsLng(lng);
-      const res = await api.clockOut(user.userId, lat, lng);
+      const res = await api.clockOut(user.email, lat, lng);
       if (res.success) {
         const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         setClockOutDone(true); setClockOutTime(time);
-        localStorage.setItem("attendance_clockout_" + user.userId, "true");
-        localStorage.setItem("attendance_clockout_time_" + user.userId, time);
+        localStorage.setItem("attendance_clockout_" + user.email, "true");
+        localStorage.setItem("attendance_clockout_time_" + user.email, time);
       }
     } catch {
       const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       setClockOutDone(true); setClockOutTime(time);
-      localStorage.setItem("attendance_clockout_" + user.userId, "true");
-      localStorage.setItem("attendance_clockout_time_" + user.userId, time);
+      localStorage.setItem("attendance_clockout_" + user.email, "true");
+      localStorage.setItem("attendance_clockout_time_" + user.email, time);
     } finally { setClocking(false); }
   }
 
