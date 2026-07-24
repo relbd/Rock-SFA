@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://script.google.com/macros/s/AKfycbySHcMiI14pzMqjmKr48js-XbJK7q0hV0j8AExOKWw8z5I1mrpdv9ECZ-4QLrgCvBMs/exec";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://script.google.com/macros/s/AKfycbz2dLo6m-IswBSYxexx9Mec-u0MuWZS1z3ROpluRsSGCcQNArH32xX8RPlPLkkRPGFQ/exec";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
