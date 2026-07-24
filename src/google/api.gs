@@ -641,8 +641,8 @@ function getDashboardData(data) {
           lDateStr = String(lTs || "");
         }
         if (lUserId.toLowerCase() === email.toLowerCase() && lDateStr === today) {
-          if (lType === "Clock In" && !clockIn) clockIn = lTs instanceof Date ? Utilities.formatDate(lTs, "Asia/Dhaka", "hh:mm a") : String(lTs);
-          if (lType === "Clock Out") clockOut = lTs instanceof Date ? Utilities.formatDate(lTs, "Asia/Dhaka", "hh:mm a") : String(lTs);
+          if (lType === "Clock In" && !clockIn) clockIn = lTs instanceof Date ? lTs.toISOString() : String(lTs);
+          if (lType === "Clock Out") clockOut = lTs instanceof Date ? lTs.toISOString() : String(lTs);
         }
       }
     }

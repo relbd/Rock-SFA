@@ -15,7 +15,17 @@ function formatTime(ts: string): string {
   if (/^\d{1,2}:\d{2}\s?(AM|PM|am|pm)$/i.test(ts.trim())) return ts.trim();
   try {
     const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
+    if (isNaN(d.getTime())) {
+      const match = ts.match(/(\d{1,2}:\d{2}:\d{2})/);
+      if (match) {
+        const parts = match[1].split(":");
+        let h = parseInt(parts[0]);
+        const ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12 || 12;
+        return h + ":" + parts[1] + " " + ampm;
+      }
+      return ts;
+    }
     return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
   } catch {
     return ts;
