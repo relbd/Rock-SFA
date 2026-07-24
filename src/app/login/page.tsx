@@ -48,7 +48,7 @@ export default function Login() {
         {/* Logo / Brand */}
         <div className="text-center mb-8">
           <img
-            src="https://drive.google.com/uc?export=view&id=1nHBD_9M2pTs_fqXEYG-IoPtC1uCXt75l"
+            src="/logo.png"
             alt="Rock Energy Logo"
             className="w-20 h-20 mx-auto mb-4 object-contain drop-shadow-lg"
           />
