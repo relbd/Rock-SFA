@@ -76,6 +76,10 @@ function AttendanceContent() {
 
   async function handleClockIn() {
     if (!user || clockInDone) return;
+    if (!selfieBase64) {
+      fileInputRef.current?.click();
+      return;
+    }
     setClocking(true);
     try {
       const loc = await getLocation();
@@ -227,7 +231,7 @@ function AttendanceContent() {
         {/* Action Buttons */}
         {!clockInDone && (
           <Button className="w-full h-14 rounded-xl gradient-primary text-white font-semibold text-base shadow-lg hover:opacity-90 transition-opacity" size="lg" onClick={handleClockIn} disabled={clocking}>
-            {clocking ? "Processing..." : "Clock In"}
+            {clocking ? "Processing..." : !selfieBase64 ? "Capture Selfie First" : "Clock In"}
           </Button>
         )}
 
