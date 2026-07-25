@@ -188,17 +188,17 @@ function VisitContent() {
     if (!navigator.geolocation) { setGpsMessage("GPS not available"); return; }
     setGettingGps(true);
     setGpsMessage("");
-    var bestLat = 0;
-    var bestLng = 0;
-    var bestAcc = Infinity;
-    var attempts = 0;
-    var maxAttempts = 5;
+    let bestLat = 0;
+    let bestLng = 0;
+    let bestAcc = Infinity;
+    let attempts = 0;
+    const maxAttempts = 5;
 
     function tryGetLocation() {
       attempts++;
       navigator.geolocation.getCurrentPosition(
         function (pos) {
-          var acc = pos.coords.accuracy;
+          const acc = pos.coords.accuracy;
           if (acc < bestAcc) {
             bestAcc = acc;
             bestLat = pos.coords.latitude;
@@ -208,10 +208,10 @@ function VisitContent() {
             setGpsLat(bestLat.toFixed(8));
             setGpsLng(bestLng.toFixed(8));
             setGpsAccuracy(bestAcc.toFixed(0));
-            var pct = Math.max(0, Math.round(100 - bestAcc));
+            const pct = Math.max(0, Math.round(100 - bestAcc));
             setGpsMessage("Location captured (" + pct + "% accuracy)");
             if (storeLat && storeLng) {
-              var d = haversineDistance(bestLat, bestLng, Number(storeLat), Number(storeLng));
+              const d = haversineDistance(bestLat, bestLng, Number(storeLat), Number(storeLng));
               setDistance(Math.round(d));
             }
             setGettingGps(false);
@@ -224,10 +224,10 @@ function VisitContent() {
             setGpsLat(bestLat.toFixed(8));
             setGpsLng(bestLng.toFixed(8));
             setGpsAccuracy(bestAcc.toFixed(0));
-            var pct = Math.max(0, Math.round(100 - bestAcc));
+            const pct = Math.max(0, Math.round(100 - bestAcc));
             setGpsMessage("Location captured (" + pct + "% accuracy)");
             if (storeLat && storeLng) {
-              var d = haversineDistance(bestLat, bestLng, Number(storeLat), Number(storeLng));
+              const d = haversineDistance(bestLat, bestLng, Number(storeLat), Number(storeLng));
               setDistance(Math.round(d));
             }
           } else {
