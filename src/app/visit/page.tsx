@@ -188,23 +188,57 @@ function VisitContent() {
     if (!navigator.geolocation) { setGpsMessage("GPS not available"); return; }
     setGettingGps(true);
     setGpsMessage("");
-    navigator.geolocation.getCurrentPosition(
-      function (pos) {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setGpsLat(lat.toFixed(6));
-        setGpsLng(lng.toFixed(6));
-        setGpsAccuracy(pos.coords.accuracy.toFixed(0));
-        setGpsMessage("Location captured");
-        if (storeLat && storeLng) {
-          const d = haversineDistance(lat, lng, Number(storeLat), Number(storeLng));
-          setDistance(Math.round(d));
-        }
-        setGettingGps(false);
-      },
-      function () { setGpsMessage("GPS permission denied"); setGettingGps(false); },
-      { enableHighAccuracy: true, timeout: 15000 },
-    );
+    var bestLat = 0;
+    var bestLng = 0;
+    var bestAcc = Infinity;
+    var attempts = 0;
+    var maxAttempts = 5;
+
+    function tryGetLocation() {
+      attempts++;
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          var acc = pos.coords.accuracy;
+          if (acc < bestAcc) {
+            bestAcc = acc;
+            bestLat = pos.coords.latitude;
+            bestLng = pos.coords.longitude;
+          }
+          if (acc <= 10 || attempts >= maxAttempts) {
+            setGpsLat(bestLat.toFixed(8));
+            setGpsLng(bestLng.toFixed(8));
+            setGpsAccuracy(bestAcc.toFixed(0));
+            var pct = Math.max(0, Math.round(100 - bestAcc));
+            setGpsMessage("Location captured (" + pct + "% accuracy)");
+            if (storeLat && storeLng) {
+              var d = haversineDistance(bestLat, bestLng, Number(storeLat), Number(storeLng));
+              setDistance(Math.round(d));
+            }
+            setGettingGps(false);
+          } else {
+            setTimeout(tryGetLocation, 1000);
+          }
+        },
+        function () {
+          if (bestAcc < Infinity) {
+            setGpsLat(bestLat.toFixed(8));
+            setGpsLng(bestLng.toFixed(8));
+            setGpsAccuracy(bestAcc.toFixed(0));
+            var pct = Math.max(0, Math.round(100 - bestAcc));
+            setGpsMessage("Location captured (" + pct + "% accuracy)");
+            if (storeLat && storeLng) {
+              var d = haversineDistance(bestLat, bestLng, Number(storeLat), Number(storeLng));
+              setDistance(Math.round(d));
+            }
+          } else {
+            setGpsMessage("GPS permission denied");
+          }
+          setGettingGps(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      );
+    }
+    tryGetLocation();
   }
 
   function handleSelfieCapture(e: React.ChangeEvent<HTMLInputElement>) {
@@ -486,11 +520,17 @@ function VisitContent() {
             <div className="space-y-2">
               <Label className="text-xs text-gray-500 font-medium">GPS Location <span className="text-red-500">*</span></Label>
               <div className="flex items-center gap-2">
-                <Input readOnly placeholder={gpsLat && gpsLng ? gpsLat + ", " + gpsLng : "Not captured yet"} className="bg-gray-50 h-10 rounded-xl flex-1" />
+                <Input readOnly placeholder={gpsLat && gpsLng ? gpsLat + ", " + gpsLng : "Not captured yet"} className="bg-gray-50 h-10 rounded-xl flex-1 font-mono text-xs" />
                 <Button type="button" variant="outline" size="icon" onClick={getLocation} disabled={gettingGps} className="h-10 w-10 rounded-xl shrink-0">
                   {gettingGps ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
                 </Button>
               </div>
+              {gpsLat && gpsLng && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 rounded-lg px-3 py-2"><p className="text-[10px] text-gray-400">LATITUDE</p><p className="text-xs font-mono font-bold text-gray-800">{gpsLat}</p></div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2"><p className="text-[10px] text-gray-400">LONGITUDE</p><p className="text-xs font-mono font-bold text-gray-800">{gpsLng}</p></div>
+                </div>
+              )}
               {gpsMessage && <p className={"text-xs font-medium " + (gpsLat ? "text-emerald-600" : "text-red-500")}>{gpsMessage}</p>}
               {gpsAccuracy && <p className="text-xs text-gray-400">Accuracy: {gpsAccuracy}m</p>}
             </div>
