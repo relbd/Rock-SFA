@@ -609,7 +609,7 @@ function getDashboardData(data) {
   var totalOrderQty = 0;
   try {
     var oss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
-    var oSheet = oss.getSheets()[0];
+    var oSheet = oss.getSheetByName("Sec Orders");
     var oData = oSheet.getDataRange().getValues();
     var oHeaders = oData[0] || [];
     var oCol = toMap(oHeaders);
@@ -824,7 +824,7 @@ function getReportData(data) {
 
   try {
     var oss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
-    var oSheet = oss.getSheets()[0];
+    var oSheet = oss.getSheetByName("Sec Orders");
     var oData = oSheet.getDataRange().getValues();
     var oHeaders = oData[0] || [];
     var oCol = toMap(oHeaders);
@@ -1087,7 +1087,7 @@ function handleSubmitOrder(data) {
     lock.waitLock(15000);
 
     var ss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
-    var sheet = ss.getSheets()[0];
+    var sheet = ss.getSheetByName("Sec Orders");
     var allData = sheet.getDataRange().getValues();
     var headers = allData[0] || [];
     var col = toMap(headers);
