@@ -1088,6 +1088,10 @@ function handleSubmitOrder(data) {
 
     var ss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
     var sheet = ss.getSheetByName("Sec Orders");
+    if (!sheet) {
+      var availableSheets = ss.getSheets().map(function(s) { return s.getName(); }).join(", ");
+      return createResponse({ success: false, message: "Sheet 'Sec Orders' not found. Available sheets: " + availableSheets }, 404);
+    }
     var allData = sheet.getDataRange().getValues();
     var headers = allData[0] || [];
     var col = toMap(headers);
