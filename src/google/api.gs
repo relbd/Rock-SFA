@@ -1133,6 +1133,7 @@ function handleSubmitOrder(data) {
     var year = now.getFullYear();
 
     // Write one row per product
+    var rowsBefore = sheet.getLastRow();
     for (var p = 0; p < data.products.length; p++) {
       var product = data.products[p];
       var row = headers.map(function (h) {
@@ -1165,10 +1166,12 @@ function handleSubmitOrder(data) {
       });
       sheet.appendRow(row);
     }
+    var rowsAfter = sheet.getLastRow();
 
     return createResponse({
       success: true,
       invoiceId: nextId,
+      debug: "Sheet: " + sheet.getName() + " | SheetID: " + ss.getId() + " | Rows before: " + rowsBefore + " | Rows after: " + rowsAfter + " | Headers: " + headers.join(", "),
       message: "Order " + nextId + " placed successfully with " + data.products.length + " product(s)"
     });
 
