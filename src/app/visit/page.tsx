@@ -240,7 +240,7 @@ function VisitContent() {
   function validate(): string | null {
     if (!email) return "Email is required";
     if (!selectedCustomerId) return "Customer is required";
-    if (!totalQuantity || Number(totalQuantity) <= 0) return "Total Quantity is required";
+    if (totalQuantity === "" || totalQuantity === null || totalQuantity === undefined) return "Total Quantity is required";
     if (brandFocus.length === 0) return "Brand Focus is required";
     if (!gpsLat || !gpsLng) return "GPS Location is required";
     return null;
