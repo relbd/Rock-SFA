@@ -1160,7 +1160,7 @@ function handleSubmitOrder(data) {
         if (h2 === "territory") return data.territory || "";
         if (h2 === "employee name") return data.employeeName || "";
         if (h2 === "product category") return product.category || "";
-        if (h2 === "order status") return "Pending";
+        if (h2 === "order status") return "Done";
         if (h2 === "created by") return data.email || "";
         if (h2 === "created at") return now;
         return "";
