@@ -401,19 +401,19 @@ export const api = {
   },
 
   getMasterData() {
-    return get<MasterDataResponse>({ action: "getMasterData" });
+    return post<MasterDataResponse>({ action: "getMasterData" });
   },
 
   getCustomers() {
-    return get<CustomerListResponse>({ action: "getCustomers" });
+    return post<CustomerListResponse>({ action: "getCustomers" });
   },
 
   getProducts() {
-    return get<ProductListResponse>({ action: "getProducts" });
+    return post<ProductListResponse>({ action: "getProducts" });
   },
 
   getSubDBs() {
-    return get<SubDBListResponse>({ action: "getSubDBs" });
+    return post<SubDBListResponse>({ action: "getSubDBs" });
   },
 
   submitVisit(data: VisitData) {

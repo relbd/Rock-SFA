@@ -37,6 +37,14 @@ function doPost(e) {
       return getDashboardData(data);
     } else if (action === "getReportData") {
       return getReportData(data);
+    } else if (action === "getMasterData") {
+      return getMasterData();
+    } else if (action === "getCustomers") {
+      return getCustomers();
+    } else if (action === "getProducts") {
+      return getProducts();
+    } else if (action === "getSubDBs") {
+      return getSubDBs();
     }
 
     return createResponse({ success: false, message: "Unknown action" }, 400);
