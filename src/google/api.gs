@@ -438,7 +438,7 @@ function getCustomers() {
 
 function handleSubmitVisit(data) {
   // Validate required fields
-  var required = ["email", "customerId", "totalQuantity", "brandFocus"];
+  var required = ["email", "customerId", "brandFocus"];
   for (var i = 0; i < required.length; i++) {
     if (!data[required[i]] || String(data[required[i]]).trim() === "") {
       return createResponse({
@@ -446,6 +446,9 @@ function handleSubmitVisit(data) {
         message: "Missing required field: " + required[i]
       }, 400);
     }
+  }
+  if (data.totalQuantity === undefined || data.totalQuantity === null || String(data.totalQuantity).trim() === "") {
+    return createResponse({ success: false, message: "Missing required field: totalQuantity" }, 400);
   }
 
   var lock = LockService.getScriptLock();
