@@ -156,8 +156,7 @@ function OrderContent() {
         attachmentBase64: attachmentBase64 || undefined, attachmentType,
       });
       if (result.success) {
-        const debugInfo = result.debug ? `\n[${result.debug}]` : "";
-        setSubmitResult({ success: true, message: (result.message || "Order placed successfully!") + debugInfo });
+        setSubmitResult({ success: true, message: result.message || "Order placed successfully!" });
         setOrderProducts([{ productId: "", productName: "", category: "", quantity: 1, showDropdown: false }]);
         setAttachmentPreview(""); setAttachmentBase64("");
       } else {
