@@ -224,6 +224,7 @@ export interface OrderResponse {
   success: boolean;
   invoiceId?: string;
   message?: string;
+  debug?: string;
 }
 
 export interface DashboardVisit {
