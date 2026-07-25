@@ -156,7 +156,8 @@ function OrderContent() {
         attachmentBase64: attachmentBase64 || undefined, attachmentType,
       });
       if (result.success) {
-        setSubmitResult({ success: true, message: result.message || "Order placed successfully!" });
+        const debugInfo = (result as Record<string, unknown>).debug ? `\n[${(result as Record<string, unknown>).debug}]` : "";
+        setSubmitResult({ success: true, message: (result.message || "Order placed successfully!") + debugInfo });
         setOrderProducts([{ productId: "", productName: "", category: "", quantity: 1, showDropdown: false }]);
         setAttachmentPreview(""); setAttachmentBase64("");
       } else {
