@@ -1088,9 +1088,10 @@ function handleSubmitOrder(data) {
 
     var ss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
     var sheet = ss.getSheetByName("Sec Orders");
+    var sheetUsed = sheet ? sheet.getName() : "NOT FOUND";
     if (!sheet) {
-      var availableSheets = ss.getSheets().map(function(s) { return s.getName(); }).join(", ");
-      return createResponse({ success: false, message: "Sheet 'Sec Orders' not found. Available sheets: " + availableSheets }, 404);
+      sheet = ss.getSheets()[0];
+      sheetUsed = sheet.getName() + " (fallback to first tab)";
     }
     var allData = sheet.getDataRange().getValues();
     var headers = allData[0] || [];
@@ -1171,7 +1172,7 @@ function handleSubmitOrder(data) {
     return createResponse({
       success: true,
       invoiceId: nextId,
-      debug: "Sheet: " + sheet.getName() + " | SheetID: " + ss.getId() + " | Rows before: " + rowsBefore + " | Rows after: " + rowsAfter + " | Headers: " + headers.join(", "),
+      debug: "Sheet used: " + sheetUsed + " | SheetID: " + ss.getId() + " | Rows before: " + rowsBefore + " | Rows after: " + rowsAfter + " | Headers: " + headers.join(", "),
       message: "Order " + nextId + " placed successfully with " + data.products.length + " product(s)"
     });
 
