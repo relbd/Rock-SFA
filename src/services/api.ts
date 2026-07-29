@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycby5IQpU8qjGltECLQiaTmSRWuy3ZnDX6Rhf4l4f17OgEqDSHy8tqhTuhsfMLjd-sWcH/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxafcCfEMsnCvLmieQbG8Nfsz6Md4bS3itwFdt7rTtHoC-DgiwCbnAIF4tPvyormft1/exec";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;

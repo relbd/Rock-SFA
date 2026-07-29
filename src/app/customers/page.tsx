@@ -99,7 +99,7 @@ function CustomerRegistrationContent() {
     if (!navigator.geolocation) { setGpsMessage("GPS not available"); return; }
     setGettingGps(true); setGpsMessage("");
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setGpsLat(pos.coords.latitude.toFixed(6)); setGpsLng(pos.coords.longitude.toFixed(6)); setGpsAccuracy(pos.coords.accuracy.toFixed(0)); setGpsMessage("Location captured"); setGettingGps(false); },
+      (pos) => { setGpsLat(String(pos.coords.latitude)); setGpsLng(String(pos.coords.longitude)); setGpsAccuracy(pos.coords.accuracy.toFixed(0)); setGpsMessage("Location captured"); setGettingGps(false); },
       () => { setGpsMessage("GPS permission denied or failed"); setGettingGps(false); },
       { enableHighAccuracy: true, timeout: 15000 },
     );
