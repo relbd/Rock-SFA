@@ -104,6 +104,7 @@ function VisitContent() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
+  const submitGuardRef = useRef(false);
 
   const filteredEmployees = masterData
     ? masterData.employees.filter(function (e) {
@@ -283,6 +284,8 @@ function VisitContent() {
   async function handleSubmit() {
     const err = validate();
     if (err) { setMessage(err); setMessageType("error"); return; }
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
     setSubmitting(true);
     setMessage("");
     try {
@@ -328,6 +331,7 @@ function VisitContent() {
       setMessage("Unable to connect. Try again.");
     } finally {
       setSubmitting(false);
+      submitGuardRef.current = false;
     }
   }
 
