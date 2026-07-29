@@ -65,6 +65,7 @@ function CustomerRegistrationContent() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
+  const submitGuardRef = useRef(false);
 
   const filteredAreas = masterData ? masterData.areas.filter((a) => a.district === district) : [];
   const filteredEmployees = masterData
@@ -143,6 +144,8 @@ function CustomerRegistrationContent() {
 
   async function handleSubmit() {
     const err = validate(); if (err) { setMessage(err); setMessageType("error"); return; }
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
     setSubmitting(true); setMessage("");
     try {
       const res = await api.registerCustomer({
@@ -164,7 +167,7 @@ function CustomerRegistrationContent() {
         setPhotoBase64(""); setPhotoPreview("");
       } else { setMessageType("error"); setMessage(res.message || "Registration failed"); }
     } catch { setMessageType("error"); setMessage("Unable to connect. Try again."); }
-    finally { setSubmitting(false); }
+    finally { setSubmitting(false); submitGuardRef.current = false; }
   }
 
   if (loadingMaster) {

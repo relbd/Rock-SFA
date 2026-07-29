@@ -232,6 +232,14 @@ function handleRegisterCustomer(data) {
     var headers = allData[0] || [];
     var col = toMap(headers);
 
+    // ---- Check duplicate phone ----
+    var phone = String(data.ownerContact || "").trim();
+    for (var r = 1; r < allData.length; r++) {
+      if (String(allData[r][col["Owner Contact Number"]] || "").trim() === phone) {
+        return createResponse({ success: false, message: "Customer with this phone number already exists (ID: " + allData[r][col["Customer ID"]] + ")" }, 400);
+      }
+    }
+
     // ---- Generate Customer ID ----
     var lastId = "22000000";
     for (var r = 1; r < allData.length; r++) {
