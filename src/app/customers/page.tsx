@@ -139,6 +139,7 @@ function CustomerRegistrationContent() {
     if (oilBrands.length === 0) return "Oil Brand Selling is required";
     if (!totalAvgVolume || Number(totalAvgVolume) <= 0) return "Total Average Volume is required";
     if (!gpsLat || !gpsLng) return "GPS Location is required";
+    if (!photoBase64) return "Shop Photo is required";
     return null;
   }
 
