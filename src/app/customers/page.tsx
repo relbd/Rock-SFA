@@ -109,14 +109,16 @@ function CustomerRegistrationContent() {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const result = ev.target?.result as string; setPhotoPreview(result);
+      const result = ev.target?.result as string; 
       const img = new window.Image();
       img.onload = () => {
         const canvas = document.createElement("canvas"); const maxW = 800;
         const scale = img.width > maxW ? maxW / img.width : 1;
         canvas.width = img.width * scale; canvas.height = img.height * scale;
         const ctx = canvas.getContext("2d"); ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setPhotoBase64(canvas.toDataURL("image/jpeg", 0.8));
+        const compressed = canvas.toDataURL("image/jpeg", 0.7);
+        setPhotoPreview(compressed);
+        setPhotoBase64(compressed);
       };
       img.src = result;
     };

@@ -248,17 +248,18 @@ function VisitContent() {
     const reader = new FileReader();
     reader.onload = function (ev) {
       const result = ev.target?.result as string;
-      setSelfiePreview(result);
       const img = new window.Image();
       img.onload = function () {
         const canvas = document.createElement("canvas");
-        const maxW = 600;
+        const maxW = 800;
         const scale = img.width > maxW ? maxW / img.width : 1;
         canvas.width = img.width * scale;
         canvas.height = img.height * scale;
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setSelfieBase64(canvas.toDataURL("image/jpeg", 0.8));
+        const compressed = canvas.toDataURL("image/jpeg", 0.7);
+        setSelfiePreview(compressed);
+        setSelfieBase64(compressed);
       };
       img.src = result;
     };
