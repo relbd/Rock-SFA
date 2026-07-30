@@ -46,8 +46,8 @@ function OrderContent() {
   const [category, setCategory] = useState("");
 
   const [orderProducts, setOrderProducts] = useState<Array<{
-    productId: string; productName: string; category: string; quantity: number | string; showDropdown?: boolean;
-  }>>([{ productId: "", productName: "", category: "", quantity: "", showDropdown: false }]);
+    productId: string; productName: string; category: string; quantity: number; showDropdown?: boolean;
+  }>>([{ productId: "", productName: "", category: "", quantity: 0, showDropdown: false }]);
 
   const [attachmentPreview, setAttachmentPreview] = useState("");
   const [attachmentBase64, setAttachmentBase64] = useState("");
