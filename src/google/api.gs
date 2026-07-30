@@ -661,7 +661,7 @@ function handleSubmitVisit(data) {
 // ==========================================
 
 function getDashboardData(data) {
-  var email = data.email || "";
+  var email = String(data.email || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
   if (!email) {
     return createResponse({ success: false, message: "Email is required" }, 400);
   }
@@ -679,12 +679,20 @@ function getDashboardData(data) {
 
     for (var i = 1; i < vData.length; i++) {
       var r = vData[i];
-      var vEmail = String(r[vCol["Email"]] || "").trim();
-      var vDate = String(r[vCol["Date"]] || "").trim();
-      if (vEmail.toLowerCase() === email.toLowerCase() && vDate === today) {
+      var vEmail = String(r[vCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+      
+      var rawDate = r[vCol["Date"]];
+      var vDate = "";
+      if (rawDate instanceof Date) {
+        vDate = Utilities.formatDate(rawDate, "Asia/Dhaka", "dd-MMM-yyyy");
+      } else {
+        vDate = String(rawDate || "").trim();
+      }
+
+      if (vEmail === email && vDate === today) {
         visits.push({
           visitId: String(r[vCol["Visit ID"]] || ""),
-          timestamp: String(r[vCol["Timestamp"]] || ""),
+          timestamp: r[vCol["Timestamp"]] instanceof Date ? r[vCol["Timestamp"]].toISOString() : String(r[vCol["Timestamp"]] || ""),
           customerCode: String(r[vCol["Customer Code"]] || ""),
           customerName: String(r[vCol["Customer Name"]] || ""),
           area: String(r[vCol["Area"]] || ""),
@@ -713,9 +721,23 @@ function getDashboardData(data) {
 
     for (var j = 1; j < oData.length; j++) {
       var or = oData[j];
-      var oEmail = String(or[oCol["Email"]] || "").trim();
-      var oCreatedAt = String(or[oCol["Created At"]] || "");
-      if (oEmail.toLowerCase() === email.toLowerCase() && oCreatedAt.indexOf(today) !== -1) {
+      var oEmail = String(or[oCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+      
+      var rawCreatedAt = or[oCol["Created At"]];
+      var oDateStr = "";
+      var oCreatedAtIso = "";
+      
+      if (rawCreatedAt instanceof Date) {
+        oDateStr = Utilities.formatDate(rawCreatedAt, "Asia/Dhaka", "dd-MMM-yyyy");
+        oCreatedAtIso = rawCreatedAt.toISOString();
+      } else {
+        oCreatedAtIso = String(rawCreatedAt || "");
+        oDateStr = oCreatedAtIso; // Fallback string matching
+      }
+
+      var isTodayOrder = (oDateStr === today) || (oCreatedAtIso.indexOf(today) !== -1);
+
+      if (oEmail === email && isTodayOrder) {
         var qty = Number(or[oCol["Quantity"]]) || 0;
         totalOrderQty += qty;
         orders.push({
@@ -723,7 +745,7 @@ function getDashboardData(data) {
           customerName: String(or[oCol["Customer Name"]] || ""),
           productName: String(or[oCol["Product Name"]] || ""),
           quantity: qty,
-          createdAt: oCreatedAt
+          createdAt: oCreatedAtIso
         });
       }
     }
@@ -739,16 +761,18 @@ function getDashboardData(data) {
       var lData = lSheet.getDataRange().getValues();
       for (var k = 1; k < lData.length; k++) {
         var lr = lData[k];
-        var lUserId = String(lr[1] || "").trim();
+        var lUserId = String(lr[1] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
         var lType = String(lr[2] || "").trim();
         var lTs = lr[3];
         var lDateStr = "";
+        
         if (lTs instanceof Date) {
           lDateStr = Utilities.formatDate(lTs, "Asia/Dhaka", "dd-MMM-yyyy");
         } else {
-          lDateStr = String(lTs || "");
+          lDateStr = String(lTs || "").trim();
         }
-        if (lUserId.toLowerCase() === email.toLowerCase() && lDateStr === today) {
+        
+        if (lUserId === email && lDateStr === today) {
           if (lType === "Clock In" && !clockIn) clockIn = lTs instanceof Date ? lTs.toISOString() : String(lTs);
           if (lType === "Clock Out") clockOut = lTs instanceof Date ? lTs.toISOString() : String(lTs);
         }
@@ -802,7 +826,7 @@ function getDashboardData(data) {
 // ==========================================
 
 function getReportData(data) {
-  var email = (data.email || "").trim();
+  var email = String(data.email || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
   if (!email) {
     return createResponse({ success: false, message: "Email is required" }, 400);
   }
@@ -841,10 +865,17 @@ function getReportData(data) {
 
     for (var i = 1; i < vData.length; i++) {
       var r = vData[i];
-      var vEmail = String(r[vCol["Email"]] || "").trim();
-      if (vEmail.toLowerCase() !== email.toLowerCase()) continue;
+      var vEmail = String(r[vCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+      if (vEmail !== email) continue;
 
-      var vDate = String(r[vCol["Date"]] || "").trim();
+      var rawDate = r[vCol["Date"]];
+      var vDate = "";
+      if (rawDate instanceof Date) {
+        vDate = Utilities.formatDate(rawDate, "Asia/Dhaka", "dd-MMM-yyyy");
+      } else {
+        vDate = String(rawDate || "").trim();
+      }
+
       if (!vDate) {
         // Fallback: derive from Timestamp column
         var ts = r[vCol["Timestamp"]];
@@ -928,8 +959,8 @@ function getReportData(data) {
 
     for (var j = 1; j < oData.length; j++) {
       var or = oData[j];
-      var oEmail = String(or[oCol["Email"]] || "").trim();
-      if (oEmail.toLowerCase() !== email.toLowerCase()) continue;
+      var oEmail = String(or[oCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+      if (oEmail !== email) continue;
 
       var oTs = or[oCol["Created At"]] || or[oCol["Timestamp"]];
       var oDateStr = "";
@@ -989,7 +1020,7 @@ function getReportData(data) {
       var lData = lSheet.getDataRange().getValues();
       for (var k = 1; k < lData.length; k++) {
         var lr = lData[k];
-        var lUserId = String(lr[1] || "").trim();
+        var lUserId = String(lr[1] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
         var lType = String(lr[2] || "").trim();
         var lTs = lr[3];
         var lDateStr = "";
@@ -999,7 +1030,7 @@ function getReportData(data) {
           lDateStr = String(lTs || "");
         }
 
-        if (lUserId.toLowerCase() !== email.toLowerCase()) continue;
+        if (lUserId !== email) continue;
         if (!dateSet[lDateStr]) continue;
 
         if (lType === "Clock In") totalClockIns++;
