@@ -3,10 +3,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, BarChart3, Award, Users, Calendar, Store, UserPlus, PieChart, Activity, Zap, XCircle, ArrowUp, ArrowDown, Minus, LogOut } from "lucide-react";
+import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Calendar, Store, UserPlus, PieChart, Activity, Zap, XCircle, ArrowUp, ArrowDown, Minus, LogOut } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData } from "@/services/api";
+import { ThreeMonthSummary } from "./components/ThreeMonthSummary";
+import { TopProductsCard } from "./components/TopProductsCard";
+import { TopCustomersCard } from "./components/TopCustomersCard";
+import { AttendanceHistoryCard } from "./components/AttendanceHistoryCard";
 
 const VISIT_TARGET = 20;
 
@@ -608,7 +612,7 @@ function DashboardContent() {
           </CardHeader>
           <CardContent>
             {groupedOrders.length > 0 ? (
-              <div className="space-y-2.5">
+              <div className="max-h-96 overflow-auto space-y-2.5 pr-1">
                 {groupedOrders.map(([invoiceId, items]) => (
                   <div key={invoiceId} className="border border-gray-100 rounded-xl p-3 bg-white">
                     <div className="flex items-center justify-between mb-2">
@@ -648,7 +652,7 @@ function DashboardContent() {
           </CardHeader>
           <CardContent>
             {data?.visits && data.visits.length > 0 ? (
-              <div className="space-y-0">
+              <div className="max-h-96 overflow-auto space-y-0 pr-1">
                 {data.visits.map((visit, idx) => {
                   const hasGps = visit.latitude && visit.longitude;
                   return (
@@ -689,40 +693,7 @@ function DashboardContent() {
         </Card>
 
         {/* 3-Month Summary */}
-        <Card className="card-shadow border-0">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-indigo-500" />
-              3-Month Sales Summary
-            </CardTitle>
-            <p className="text-[10px] text-gray-400 font-medium">
-              {report ? `${report.startDate} → ${report.endDate}` : "No report data loaded"}
-            </p>
-          </CardHeader>
-          <CardContent>
-            {report ? (
-              <div className="grid grid-cols-2 gap-2.5">
-                {[
-                  { bg: "blue", label: "Total Visits", value: report.summary.totalVisits },
-                  { bg: "emerald", label: "Total Orders", value: report.summary.totalOrders },
-                  { bg: "amber", label: "Total Qty Sold", value: report.summary.totalOrderQty },
-                  { bg: "violet", label: "Distance (km)", value: report.summary.totalDistanceKm },
-                  { bg: "teal", label: "Active Days", value: report.summary.activeDays },
-                  { bg: "rose", label: "Avg Qty/Visit", value: report.summary.avgQtyPerVisit.toFixed(1) },
-                  { bg: "cyan", label: "Unique Customers", value: report.summary.uniqueCustomers },
-                  { bg: "orange", label: "Avg Visits/Day", value: report.summary.avgVisitsPerDay.toFixed(1) },
-                ].map((item) => (
-                  <div key={item.label} className={`bg-${item.bg}-50 p-3 rounded-xl`}>
-                    <p className="text-[10px] text-gray-500 font-medium">{item.label}</p>
-                    <p className={`text-lg font-bold text-${item.bg}-600`}>{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon={BarChart3} label="Report data not available. Tap refresh to retry." />
-            )}
-          </CardContent>
-        </Card>
+        <ThreeMonthSummary report={report} />
 
         {/* Monthly Trend */}
         <Card className="card-shadow border-0">
@@ -818,104 +789,11 @@ function DashboardContent() {
         </Card>
 
         {/* Attendance History */}
-        <Card className="card-shadow border-0">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Clock className="w-4 h-4 text-indigo-500" />
-              Attendance History
-            </CardTitle>
-            <p className="text-[10px] text-gray-400 font-medium">{report ? `${report.summary.totalClockIns} clock-ins in range` : "No attendance data"}</p>
-          </CardHeader>
-          <CardContent>
-            {report && report.attendance && report.attendance.length > 0 ? (
-              <div className="space-y-2">
-                {report.attendance.slice(-5).reverse().map((att, idx) => {
-                  const isClockIn = att.type.toLowerCase().includes("in");
-                  return (
-                    <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-xl p-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-2 h-2 rounded-full ${isClockIn ? "bg-emerald-500" : "bg-red-500"}`} />
-                        <span className="text-xs font-semibold text-gray-700">{att.type}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[11px] font-medium text-gray-600">{formatTime(att.timestamp)}</p>
-                        <p className="text-[10px] text-gray-400">{att.date}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState icon={Clock} label="No attendance history" />
-            )}
-          </CardContent>
-        </Card>
+        <AttendanceHistoryCard report={report} />
 
         {/* Top Products & Customers */}
-        <div className="grid grid-cols-1 gap-4">
-          <Card className="card-shadow border-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-500" />
-                Top Products
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {report && report.topProducts.length > 0 ? (
-                <div className="space-y-2.5">
-                  {report.topProducts.slice(0, 5).map((p, idx) => {
-                    const maxQty = report.topProducts[0]?.qty || 1;
-                    const pct = Math.min((p.qty / maxQty) * 100, 100);
-                    return (
-                      <div key={idx}>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-gray-700 font-semibold truncate">{p.name}</span>
-                          <span className="text-gray-500 shrink-0 ml-2 font-medium">{p.qty} qty</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyState icon={Award} label="No top products data" />
-              )}
-            </CardContent>
-          </Card>
-          <Card className="card-shadow border-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Users className="w-4 h-4 text-indigo-500" />
-                Top Customers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {report && report.topCustomers.length > 0 ? (
-                <div className="space-y-2.5">
-                  {report.topCustomers.slice(0, 5).map((c, idx) => {
-                    const maxQty = report.topCustomers[0]?.qty || 1;
-                    const pct = Math.min((c.qty / maxQty) * 100, 100);
-                    return (
-                      <div key={idx}>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-gray-700 font-semibold truncate">{c.name}</span>
-                          <span className="text-gray-500 shrink-0 ml-2 font-medium">{c.qty} qty</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyState icon={Users} label="No top customers data" />
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <TopProductsCard report={report} />
+        <TopCustomersCard report={report} />
       </div>
     </div>
   );
