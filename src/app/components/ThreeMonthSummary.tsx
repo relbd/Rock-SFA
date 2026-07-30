@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, Filter } from "lucide-react";
-import { type ReportData, type ReportOrder } from "@/services/api";
+import { type ReportData } from "@/services/api";
 
 interface ThreeMonthSummaryProps {
   report: ReportData | null;
@@ -15,41 +15,41 @@ interface MonthData {
   month: string;
   label: string;
   fullLabel: string;
-  visits: number;
-  orders: number;
-  qty: number;
+  totalQty: number;
+  totalOrders: number;
   uniqueProducts: number;
-  activeDays: number;
+  uniqueCustomers: number;
 }
 
-function getMonthDate(dateStr: string): Date | null {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
-}
+const MONTH_SHORT: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
 
-function getUniqueProductCount(orders: ReportOrder[], year: number, month: number): number {
-  const ids = new Set<string>();
-  orders.forEach((o) => {
-    const d = getMonthDate(o.date || o.createdAt);
-    if (d && d.getFullYear() === year && d.getMonth() === month) {
-      if (o.productId) ids.add(o.productId);
-      else if (o.productName) ids.add(o.productName);
+function parseOrderDate(order: { createdAt?: string; date?: string }): Date | null {
+  if (order.createdAt) {
+    const d = new Date(order.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (order.date) {
+    const d = new Date(order.date);
+    if (!isNaN(d.getTime())) return d;
+    const m = order.date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+    if (m && MONTH_SHORT[m[2]] !== undefined) {
+      const parsed = new Date(parseInt(m[3]), MONTH_SHORT[m[2]], parseInt(m[1]));
+      if (!isNaN(parsed.getTime())) return parsed;
     }
-  });
-  return ids.size;
+  }
+  return null;
 }
 
 export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
   const months = useMemo<MonthData[]>(() => {
-    if (!report?.dailySummary || report.dailySummary.length === 0) return [];
+    if (!report?.orders || report.orders.length === 0) return [];
 
     const monthMap: Record<string, MonthData> = {};
 
-    report.dailySummary.forEach((d) => {
-      const date = getMonthDate(d.date);
+    report.orders.forEach((order) => {
+      const date = parseOrderDate(order);
       if (!date) return;
 
       const year = date.getFullYear().toString();
@@ -59,27 +59,40 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
       const fullLabel = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
       if (!monthMap[key]) {
-        monthMap[key] = { year, month: monthNum, label, fullLabel, visits: 0, orders: 0, qty: 0, uniqueProducts: 0, activeDays: 0 };
+        monthMap[key] = { year, month: monthNum, label, fullLabel, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
       }
-      monthMap[key].visits += d.visits;
-      monthMap[key].orders += d.orders;
-      monthMap[key].qty += d.qty;
-      if (d.visits > 0) monthMap[key].activeDays += 1;
+      monthMap[key].totalQty += order.quantity;
+      monthMap[key].totalOrders += 1;
     });
 
-    const sorted = Object.entries(monthMap)
-      .sort(([a], [b]) => b.localeCompare(a));
-
-    sorted.forEach(([key, data]) => {
-      const [y, m] = key.split("-");
-      data.uniqueProducts = getUniqueProductCount(report.orders || [], parseInt(y), parseInt(m) - 1);
+    Object.values(monthMap).forEach((data) => {
+      const key = `${data.year}-${data.month}`;
+      const productIds = new Set<string>();
+      const customerIds = new Set<string>();
+      report.orders.forEach((order) => {
+        const date = parseOrderDate(order);
+        if (!date) return;
+        const y = date.getFullYear().toString();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        if (`${y}-${m}` === key) {
+          if (order.productId) productIds.add(order.productId);
+          else if (order.productName) productIds.add(order.productName);
+          if (order.customerId) customerIds.add(order.customerId);
+          else if (order.customerName) customerIds.add(order.customerName);
+        }
+      });
+      data.uniqueProducts = productIds.size;
+      data.uniqueCustomers = customerIds.size;
     });
 
-    return sorted.map(([, v]) => v);
-  }, [report?.dailySummary, report?.orders]);
+    return Object.entries(monthMap)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .slice(0, 3)
+      .map(([, v]) => v);
+  }, [report?.orders]);
 
   const displayMonths = useMemo(() => {
-    if (selectedMonth === "all") return months.slice(0, 3);
+    if (selectedMonth === "all") return months;
     return months.filter((m) => `${m.year}-${m.month}` === selectedMonth);
   }, [months, selectedMonth]);
 
@@ -133,10 +146,10 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
             </span>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: "Total Visits", value: m.visits, bg: "blue" },
-                { label: "Unique Products", value: m.uniqueProducts, bg: "emerald" },
-                { label: "Total Qty Sold", value: m.qty, bg: "amber" },
-                { label: "Active Days", value: m.activeDays, bg: "teal" },
+                { label: "Quantity", value: m.totalQty, bg: "emerald" },
+                { label: "Total Orders", value: m.totalOrders, bg: "blue" },
+                { label: "Unique Products", value: m.uniqueProducts, bg: "amber" },
+                { label: "Unique Customers", value: m.uniqueCustomers, bg: "violet" },
               ].map((config) => (
                 <div key={config.label} className={`bg-${config.bg}-50 p-3 rounded-xl border border-${config.bg}-100 shadow-sm`}>
                   <p className="text-[10px] text-gray-500 font-medium">{config.label}</p>

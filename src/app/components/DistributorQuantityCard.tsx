@@ -9,27 +9,46 @@ interface DistributorQuantityCardProps {
   report: ReportData | null;
 }
 
+const MONTH_SHORT: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
+function parseDate(order: { createdAt?: string; date?: string }): Date | null {
+  if (order.createdAt) {
+    const d = new Date(order.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (order.date) {
+    const d = new Date(order.date);
+    if (!isNaN(d.getTime())) return d;
+    const m = order.date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+    if (m && MONTH_SHORT[m[2]] !== undefined) {
+      const parsed = new Date(parseInt(m[3]), MONTH_SHORT[m[2]], parseInt(m[1]));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  return null;
+}
+
+function isCurrentMonth(date: Date): boolean {
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
 export function DistributorQuantityCard({ report }: DistributorQuantityCardProps) {
   const currentMonthData = useMemo(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const distributorMap: Record<string, { brand: string; qty: number; count: number }> = {};
+    const distributorMap: Record<string, { name: string; qty: number; count: number }> = {};
 
     report.orders.forEach((order) => {
-      const orderDate = new Date(order.date || order.createdAt);
-      if (isNaN(orderDate.getTime())) return;
-      if (orderDate.getMonth() !== currentMonth || orderDate.getFullYear() !== currentYear) return;
+      const date = parseDate(order);
+      if (!date || !isCurrentMonth(date)) return;
 
-      const brand = order.productName?.split(" ")[0] || "Other";
-      if (!distributorMap[brand]) {
-        distributorMap[brand] = { brand, qty: 0, count: 0 };
+      const name = order.distributorName || "Unknown";
+      if (!distributorMap[name]) {
+        distributorMap[name] = { name, qty: 0, count: 0 };
       }
-      distributorMap[brand].qty += order.quantity;
-      distributorMap[brand].count += 1;
+      distributorMap[name].qty += order.quantity;
+      distributorMap[name].count += 1;
     });
 
     return Object.values(distributorMap)
@@ -71,7 +90,7 @@ export function DistributorQuantityCard({ report }: DistributorQuantityCardProps
             return (
               <div key={idx}>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-gray-700 font-semibold truncate">{d.brand}</span>
+                  <span className="text-gray-700 font-semibold truncate">{d.name}</span>
                   <span className="text-gray-500 shrink-0 ml-2 font-medium">{d.qty} qty</span>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">

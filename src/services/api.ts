@@ -308,6 +308,7 @@ export interface ReportOrder {
   createdAt: string;
   date: string;
   orderStatus: string;
+  distributorName?: string;
 }
 
 export interface ReportAttendance {

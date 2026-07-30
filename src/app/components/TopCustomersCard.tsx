@@ -9,26 +9,46 @@ interface TopCustomersCardProps {
   report: ReportData | null;
 }
 
+const MONTH_SHORT: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
+function parseDate(order: { createdAt?: string; date?: string }): Date | null {
+  if (order.createdAt) {
+    const d = new Date(order.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (order.date) {
+    const d = new Date(order.date);
+    if (!isNaN(d.getTime())) return d;
+    const m = order.date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+    if (m && MONTH_SHORT[m[2]] !== undefined) {
+      const parsed = new Date(parseInt(m[3]), MONTH_SHORT[m[2]], parseInt(m[1]));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  return null;
+}
+
+function isCurrentMonth(date: Date): boolean {
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
 export function TopCustomersCard({ report }: TopCustomersCardProps) {
   const currentMonthCustomers = useMemo(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
     const customerMap: Record<string, { name: string; qty: number; count: number }> = {};
 
     report.orders.forEach((order) => {
-      const orderDate = new Date(order.date || order.createdAt);
-      if (isNaN(orderDate.getTime())) return;
-      if (orderDate.getMonth() !== currentMonth || orderDate.getFullYear() !== currentYear) return;
+      const date = parseDate(order);
+      if (!date || !isCurrentMonth(date)) return;
 
-      if (!customerMap[order.customerName]) {
-        customerMap[order.customerName] = { name: order.customerName, qty: 0, count: 0 };
+      const name = order.customerName || "Unknown";
+      if (!customerMap[name]) {
+        customerMap[name] = { name, qty: 0, count: 0 };
       }
-      customerMap[order.customerName].qty += order.quantity;
-      customerMap[order.customerName].count += 1;
+      customerMap[name].qty += order.quantity;
+      customerMap[name].count += 1;
     });
 
     return Object.values(customerMap)
@@ -41,7 +61,7 @@ export function TopCustomersCard({ report }: TopCustomersCardProps) {
       <Card className="card-shadow border-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Users className="w-4 h-4 text-indigo-500" />
+            <Users className="w-4 h-4 text-violet-500" />
             Top Customers
           </CardTitle>
         </CardHeader>
@@ -58,7 +78,7 @@ export function TopCustomersCard({ report }: TopCustomersCardProps) {
     <Card className="card-shadow border-0">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Users className="w-4 h-4 text-indigo-500" />
+          <Users className="w-4 h-4 text-violet-500" />
           Top Customers
         </CardTitle>
         <p className="text-[10px] text-gray-400 font-medium">Current month</p>
@@ -74,7 +94,7 @@ export function TopCustomersCard({ report }: TopCustomersCardProps) {
                   <span className="text-gray-500 shrink-0 ml-2 font-medium">{c.qty} qty</span>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
+                  <div className="h-full bg-violet-500 rounded-full" style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );

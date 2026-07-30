@@ -9,26 +9,46 @@ interface TopProductsCardProps {
   report: ReportData | null;
 }
 
+const MONTH_SHORT: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
+function parseDate(order: { createdAt?: string; date?: string }): Date | null {
+  if (order.createdAt) {
+    const d = new Date(order.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (order.date) {
+    const d = new Date(order.date);
+    if (!isNaN(d.getTime())) return d;
+    const m = order.date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+    if (m && MONTH_SHORT[m[2]] !== undefined) {
+      const parsed = new Date(parseInt(m[3]), MONTH_SHORT[m[2]], parseInt(m[1]));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  return null;
+}
+
+function isCurrentMonth(date: Date): boolean {
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
 export function TopProductsCard({ report }: TopProductsCardProps) {
   const currentMonthProducts = useMemo(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
     const productMap: Record<string, { name: string; qty: number; count: number }> = {};
 
     report.orders.forEach((order) => {
-      const orderDate = new Date(order.date || order.createdAt);
-      if (isNaN(orderDate.getTime())) return;
-      if (orderDate.getMonth() !== currentMonth || orderDate.getFullYear() !== currentYear) return;
+      const date = parseDate(order);
+      if (!date || !isCurrentMonth(date)) return;
 
-      if (!productMap[order.productName]) {
-        productMap[order.productName] = { name: order.productName, qty: 0, count: 0 };
+      const name = order.productName || "Unknown";
+      if (!productMap[name]) {
+        productMap[name] = { name, qty: 0, count: 0 };
       }
-      productMap[order.productName].qty += order.quantity;
-      productMap[order.productName].count += 1;
+      productMap[name].qty += order.quantity;
+      productMap[name].count += 1;
     });
 
     return Object.values(productMap)
