@@ -10,9 +10,8 @@ interface ThreeMonthSummaryProps {
 }
 
 interface MonthData {
-  year: string;
-  month: string;
-  label: string;
+  year: number;
+  month: number;
   fullLabel: string;
   totalQty: number;
   totalOrders: number;
@@ -20,58 +19,42 @@ interface MonthData {
   uniqueCustomers: number;
 }
 
-const MONTH_SHORT: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
-
-function parseOrderDate(order: { createdAt?: string; date?: string }): Date | null {
-  if (order.createdAt) {
-    const d = new Date(order.createdAt);
-    if (!isNaN(d.getTime())) return d;
-  }
-  if (order.date) {
-    const d = new Date(order.date);
-    if (!isNaN(d.getTime())) return d;
-    const m = order.date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
-    if (m && MONTH_SHORT[m[2]] !== undefined) {
-      const parsed = new Date(parseInt(m[3]), MONTH_SHORT[m[2]], parseInt(m[1]));
-      if (!isNaN(parsed.getTime())) return parsed;
-    }
-  }
-  return null;
-}
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
   const months = useMemo<MonthData[]>(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
     const monthMap: Record<string, MonthData> = {};
 
     report.orders.forEach((order) => {
-      const date = parseOrderDate(order);
-      if (!date) return;
+      const m = order.orderMonth || 0;
+      const y = order.orderYear || 0;
+      if (!m || !y) return;
 
-      const year = date.getFullYear().toString();
-      const monthNum = String(date.getMonth() + 1).padStart(2, "0");
-      const key = `${year}-${monthNum}`;
+      const key = `${y}-${String(m).padStart(2, "0")}`;
 
       if (!monthMap[key]) {
-        const label = date.toLocaleDateString("en-US", { month: "short" });
-        const fullLabel = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-        monthMap[key] = { year, month: monthNum, label, fullLabel, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
+        const fullLabel = `${MONTH_NAMES[m - 1]} ${y}`;
+        monthMap[key] = { year: y, month: m, fullLabel, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
       }
       monthMap[key].totalQty += order.quantity;
       monthMap[key].totalOrders += 1;
     });
 
     Object.values(monthMap).forEach((data) => {
-      const key = `${data.year}-${data.month}`;
+      const key = `${data.year}-${String(data.month).padStart(2, "0")}`;
       const productIds = new Set<string>();
       const customerIds = new Set<string>();
       report.orders.forEach((order) => {
-        const date = parseOrderDate(order);
-        if (!date) return;
-        const y = date.getFullYear().toString();
-        const m = String(date.getMonth() + 1).padStart(2, "0");
-        if (`${y}-${m}` === key) {
+        const m = order.orderMonth || 0;
+        const y = order.orderYear || 0;
+        if (!m || !y) return;
+        if (`${y}-${String(m).padStart(2, "0")}` === key) {
           if (order.productId) productIds.add(order.productId);
           else if (order.productName) productIds.add(order.productName);
           if (order.customerId) customerIds.add(order.customerId);

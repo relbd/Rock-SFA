@@ -9,39 +9,18 @@ interface TopCustomersCardProps {
   report: ReportData | null;
 }
 
-const MONTH_SHORT: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
-
-function parseDate(order: { createdAt?: string; date?: string }): Date | null {
-  if (order.createdAt) {
-    const d = new Date(order.createdAt);
-    if (!isNaN(d.getTime())) return d;
-  }
-  if (order.date) {
-    const d = new Date(order.date);
-    if (!isNaN(d.getTime())) return d;
-    const m = order.date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
-    if (m && MONTH_SHORT[m[2]] !== undefined) {
-      const parsed = new Date(parseInt(m[3]), MONTH_SHORT[m[2]], parseInt(m[1]));
-      if (!isNaN(parsed.getTime())) return parsed;
-    }
-  }
-  return null;
-}
-
-function isCurrentMonth(date: Date): boolean {
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
-}
-
 export function TopCustomersCard({ report }: TopCustomersCardProps) {
   const currentMonthCustomers = useMemo(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+
     const customerMap: Record<string, { name: string; qty: number; count: number }> = {};
 
     report.orders.forEach((order) => {
-      const date = parseDate(order);
-      if (!date || !isCurrentMonth(date)) return;
+      if (order.orderMonth !== curMonth || order.orderYear !== curYear) return;
 
       const name = order.customerName || "Unknown";
       if (!customerMap[name]) {

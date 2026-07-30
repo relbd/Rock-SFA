@@ -985,7 +985,9 @@ function getReportData(data) {
         createdAt: oTs instanceof Date ? oTs.toISOString() : String(oTs || ""),
         date: oDateStr,
         orderStatus: String(or[oCol["Order Status"]] || "Pending"),
-        distributorName: String(or[oCol["Distributor Name"]] || "")
+        distributorName: String(or[oCol["Distributor Name"]] || ""),
+        orderMonth: Number(or[oCol["Month"]]) || 0,
+        orderYear: Number(or[oCol["Year"]]) || 0
       };
 
       orders.push(orderObj);
