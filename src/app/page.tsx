@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Calendar, Store, UserPlus, PieChart, Activity, Zap, XCircle, ArrowUp, ArrowDown, Minus, LogOut } from "lucide-react";
+import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, Zap, XCircle, ArrowUp, ArrowDown, Minus, LogOut } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData } from "@/services/api";
@@ -11,6 +11,8 @@ import { ThreeMonthSummary } from "./components/ThreeMonthSummary";
 import { TopProductsCard } from "./components/TopProductsCard";
 import { TopCustomersCard } from "./components/TopCustomersCard";
 import { AttendanceHistoryCard } from "./components/AttendanceHistoryCard";
+import { DistributorQuantityCard } from "./components/DistributorQuantityCard";
+import { computeAvgTimePerShop, formatMinutes } from "./map";
 
 const VISIT_TARGET = 20;
 
@@ -67,53 +69,6 @@ function CircularProgress({ current, target }: { current: number; target: number
         <div className="text-xl font-bold" style={{ color }}>{current}</div>
         <div className="text-[10px] text-gray-400">/ {target}</div>
       </div>
-    </div>
-  );
-}
-
-function DailyActivityChart({ data }: { data: Array<{ date: string; visits: number; orders: number; qty: number }> }) {
-  if (!data || data.length === 0) return <EmptyState icon={Calendar} label="No daily activity data" />;
-
-  const recent = data.slice(-30);
-  const maxVal = Math.max(...recent.map((d) => Math.max(d.visits, d.orders)), 1);
-
-  return (
-    <div>
-      <div className="flex items-end gap-px h-32">
-        {recent.map((d, idx) => {
-          const visitH = Math.max((d.visits / maxVal) * 100, 2);
-          const orderH = Math.max((d.orders / maxVal) * 100, 2);
-          return (
-            <div key={idx} className="flex-1 flex flex-col items-center justify-end gap-0.5 group relative">
-              <div className="w-full flex items-end justify-center gap-px h-full">
-                <div
-                  className="w-1/2 bg-blue-500 rounded-t transition-all hover:bg-blue-600"
-                  style={{ height: `${visitH}%` }}
-                  title={`${d.date}: ${d.visits} visits`}
-                />
-                <div
-                  className="w-1/2 bg-emerald-500 rounded-t transition-all hover:bg-emerald-600"
-                  style={{ height: `${orderH}%` }}
-                  title={`${d.date}: ${d.orders} orders`}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex items-center justify-center gap-4 mt-3">
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 bg-blue-500 rounded-sm" />
-          <span className="text-[10px] text-gray-500 font-medium">Visits</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" />
-          <span className="text-[10px] text-gray-500 font-medium">Orders</span>
-        </div>
-      </div>
-      <p className="text-[10px] text-gray-400 text-center mt-1">
-        Last {recent.length} active day{recent.length > 1 ? "s" : ""}
-      </p>
     </div>
   );
 }
@@ -560,6 +515,7 @@ function DashboardContent() {
                     <div><span className="text-gray-500 font-medium">Stops: </span><span className="font-bold">{data.route.length}</span></div>
                     <div><span className="text-gray-500 font-medium">Distance: </span><span className="font-bold">{data.totalDistanceKm} km</span></div>
                     <div><span className="text-gray-500 font-medium">Areas: </span><span className="font-bold">{data.areasVisited?.length || 0}</span></div>
+                    <div><span className="text-gray-500 font-medium">Avg/Shop: </span><span className="font-bold">{formatMinutes(computeAvgTimePerShop(data.route))}</span></div>
                   </div>
                 </div>
               </>
@@ -709,19 +665,6 @@ function DashboardContent() {
           </CardContent>
         </Card>
 
-        {/* Daily Activity */}
-        <Card className="card-shadow border-0">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              Daily Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DailyActivityChart data={report?.dailySummary || []} />
-          </CardContent>
-        </Card>
-
         {/* Area Breakdown */}
         <Card className="card-shadow border-0">
           <CardHeader className="pb-2">
@@ -755,38 +698,8 @@ function DashboardContent() {
           </CardContent>
         </Card>
 
-        {/* Brand Breakdown */}
-        <Card className="card-shadow border-0">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <PieChart className="w-4 h-4 text-rose-500" />
-              Visits by Brand Focus
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {report && report.brandBreakdown && report.brandBreakdown.length > 0 ? (
-              <div className="space-y-2.5">
-                {report.brandBreakdown.slice(0, 6).map((b, idx) => {
-                  const maxVisits = report.brandBreakdown[0]?.visits || 1;
-                  const pct = Math.min((b.visits / maxVisits) * 100, 100);
-                  return (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-gray-700 font-semibold truncate">{b.brand}</span>
-                        <span className="text-gray-500 shrink-0 ml-2 font-medium">{b.visits} visits</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-rose-500 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState icon={PieChart} label="No brand breakdown data" />
-            )}
-          </CardContent>
-        </Card>
+        {/* Distributor by Quantity */}
+        <DistributorQuantityCard report={report} />
 
         {/* Attendance History */}
         <AttendanceHistoryCard report={report} />

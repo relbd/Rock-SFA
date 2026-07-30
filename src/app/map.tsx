@@ -11,7 +11,7 @@ interface RouteMapProps {
   heightClass?: string;
 }
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
@@ -21,7 +21,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function parseTimeToMinutes(timeStr: string): number {
+export function parseTimeToMinutes(timeStr: string): number {
   if (!timeStr) return 0;
   try {
     const d = new Date(timeStr);
@@ -32,11 +32,28 @@ function parseTimeToMinutes(timeStr: string): number {
   }
 }
 
-function formatMinutes(totalMinutes: number): string {
+export function formatMinutes(totalMinutes: number): string {
   if (totalMinutes < 60) return `${totalMinutes}m`;
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+export function computeTimeBetweenStops(route: RoutePoint[]): number[] {
+  return route.map((point, idx) => {
+    if (idx === 0) return 0;
+    const prevMin = parseTimeToMinutes(route[idx - 1].time);
+    const currMin = parseTimeToMinutes(point.time);
+    const diff = currMin - prevMin;
+    return diff >= 0 ? diff : 0;
+  });
+}
+
+export function computeAvgTimePerShop(route: RoutePoint[]): number {
+  if (route.length <= 1) return 0;
+  const timeBetween = computeTimeBetweenStops(route);
+  const total = timeBetween.reduce((sum, t) => sum + t, 0);
+  return Math.round(total / (route.length - 1));
 }
 
 export default function RouteMap({
@@ -64,14 +81,7 @@ export default function RouteMap({
   });
 
   const totalDistance = distances.reduce((sum, d) => sum + d, 0);
-
-  const cumulativeMinutes = route.map((point, idx) => {
-    if (idx === 0) return 0;
-    const startMin = parseTimeToMinutes(route[0].time);
-    const currentMin = parseTimeToMinutes(point.time);
-    const diff = currentMin - startMin;
-    return diff >= 0 ? diff : 0;
-  });
+  const timeBetween = computeTimeBetweenStops(route);
 
   const handleSetActive = useCallback((idx: number) => {
     setActiveIdx(idx);
@@ -156,10 +166,10 @@ export default function RouteMap({
           })
           : "";
 
-        const elapsedMin = cumulativeMinutes[idx];
-        const elapsedStr = elapsedMin > 0 ? `+${formatMinutes(elapsedMin)}` : "Start";
+        const betweenMin = timeBetween[idx];
+        const betweenStr = idx === 0 ? "Start" : `~${formatMinutes(betweenMin)} here`;
 
-        const distStr = idx > 0 && distances[idx] > 0 ? `${distances[idx].toFixed(2)} km` : "Start";
+        const distStr = idx > 0 && distances[idx] > 0 ? `${distances[idx].toFixed(2)} km from prev` : "Starting point";
 
         const popup = L.popup({
           offset: [0, -20],
@@ -170,8 +180,9 @@ export default function RouteMap({
           <div style="font-family:sans-serif;min-width:170px;padding:2px">
             <div style="font-size:13px;font-weight:bold;color:#1e40af">#${idx + 1} - ${point.name}</div>
             <div style="font-size:11px;color:#6b7280;margin-top:4px">📍 ${point.area}</div>
-            <div style="font-size:11px;color:#6b7280;margin-top:2px">🕐 ${timeStr} <span style="color:#2563eb;font-weight:600">(${elapsedStr})</span></div>
-            <div style="font-size:11px;color:#2563eb;margin-top:2px">🛣️ ${distStr}</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:2px">🕐 ${timeStr}</div>
+            <div style="font-size:11px;color:#2563eb;margin-top:2px">⏱️ ${betweenStr}</div>
+            <div style="font-size:11px;color:#2563eb;margin-top:1px">🛣️ ${distStr}</div>
           </div>
         `);
 
@@ -237,7 +248,7 @@ export default function RouteMap({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route, distances, cumulativeMinutes]);
+  }, [route, distances, timeBetween]);
 
   useEffect(() => {
     if (activeIdx === null || !mapInstanceRef.current || !markersRef.current[activeIdx]) return;
@@ -362,8 +373,8 @@ export default function RouteMap({
               const isStart = idx === 0;
               const isEnd = idx === route.length - 1;
               const distFromPrev = distances[idx];
-              const elapsedMin = cumulativeMinutes[idx];
-              const elapsedStr = elapsedMin > 0 ? `+${formatMinutes(elapsedMin)}` : "Start";
+              const betweenMin = timeBetween[idx];
+              const betweenStr = idx === 0 ? "Start" : formatMinutes(betweenMin);
 
               return (
                 <button
@@ -394,8 +405,8 @@ export default function RouteMap({
                   </div>
                   <div className="flex flex-col items-end shrink-0 gap-0.5">
                     {timeStr && <span className="text-[10px] text-gray-500 font-medium">{timeStr}</span>}
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isStart ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"}`}>
-                      {elapsedStr}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isStart ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-700"}`}>
+                      {betweenStr}{!isStart && " here"}
                     </span>
                   </div>
                 </button>
