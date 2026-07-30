@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { Camera, MapPin, Clock, CheckCircle2, X, LogIn, LogOut } from "lucide-react";
+import { Camera, MapPin, Clock, CheckCircle2, X, LogIn, LogOut, FlipHorizontal } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/services/api";
@@ -14,7 +14,16 @@ function getTodayKey() {
 
 function AttendanceContent() {
   const { user } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Camera state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+
+  // Attendance state
   const [clockInDone, setClockInDone] = useState(false);
   const [clockOutDone, setClockOutDone] = useState(false);
   const [clockInTime, setClockInTime] = useState("");
@@ -44,16 +53,79 @@ function AttendanceContent() {
     }
   }, [user]);
 
-  function handleSelfieCapture(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function (ev) {
-      const result = ev.target?.result as string;
-      setSelfiePreview(result);
-      setSelfieBase64(result);
-    };
-    reader.readAsDataURL(file);
+  // Stop camera stream helper
+  function stopStream() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
   }
+
+  // Open in-browser camera
+  async function openCamera() {
+    setCameraError("");
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch {
+      setCameraError("Camera access denied. Please allow camera permission and try again.");
+    }
+  }
+
+  // Flip camera
+  async function flipCamera() {
+    stopStream();
+    const next = facingMode === "user" ? "environment" : "user";
+    setFacingMode(next);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch {
+      setCameraError("Failed to switch camera.");
+    }
+  }
+
+  // Take a photo from the video stream
+  function takePhoto() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setSelfiePreview(dataUrl);
+    setSelfieBase64(dataUrl);
+    stopStream();
+    setShowCamera(false);
+  }
+
+  // Close camera without taking photo
+  function closeCamera() {
+    stopStream();
+    setShowCamera(false);
+    setCameraError("");
+  }
+
+  // Cleanup on unmount
+  useEffect(() => { return () => { stopStream(); }; }, []);
 
   async function getLocation(): Promise<{ lat: number; lng: number } | null> {
     if (!navigator.geolocation) return null;
@@ -68,7 +140,7 @@ function AttendanceContent() {
   async function handleClockIn() {
     if (!user || clockInDone) return;
     if (!selfieBase64) {
-      fileInputRef.current?.click();
+      await openCamera();
       return;
     }
     setClocking(true);
@@ -123,6 +195,50 @@ function AttendanceContent() {
         <p className="text-blue-200 text-xs">{today}</p>
       </div>
 
+      {/* In-browser Camera Modal */}
+      {showCamera && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 bg-black/70">
+            <span className="text-white text-sm font-semibold">Take Selfie</span>
+            <button onClick={flipCamera} className="text-white p-2">
+              <FlipHorizontal className="w-6 h-6" />
+            </button>
+            <button onClick={closeCamera} className="text-white p-2">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {cameraError ? (
+            <div className="flex-1 flex flex-col items-center justify-center px-6">
+              <Camera className="w-16 h-16 text-gray-400 mb-4" />
+              <p className="text-white text-center text-sm">{cameraError}</p>
+              <Button className="mt-6" onClick={closeCamera}>Close</Button>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="flex-1 w-full object-cover"
+                style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+              />
+              <div className="bg-black/70 flex justify-center py-6">
+                <button
+                  onClick={takePhoto}
+                  className="w-18 h-18 rounded-full bg-white border-4 border-blue-500 shadow-lg active:scale-95 transition-transform"
+                  style={{ width: 72, height: 72 }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Hidden canvas for photo capture */}
+      <canvas ref={canvasRef} className="hidden" />
+
       <div className="-mt-3 px-4 space-y-4">
         {/* Status Card */}
         <Card className="card-shadow border-0">
@@ -176,8 +292,6 @@ function AttendanceContent() {
               <CardTitle className="text-sm font-semibold">Action Requirements</CardTitle>
             </div>
 
-            <input ref={fileInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleSelfieCapture} />
-
             {/* Selfie */}
             {!clockInDone ? (
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
@@ -194,7 +308,7 @@ function AttendanceContent() {
                     </button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={function () { fileInputRef.current?.click(); }} className="rounded-xl">Capture</Button>
+                  <Button size="sm" variant="outline" onClick={openCamera} className="rounded-xl">Capture</Button>
                 )}
               </div>
             ) : (
