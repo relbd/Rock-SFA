@@ -46,8 +46,8 @@ function OrderContent() {
   const [category, setCategory] = useState("");
 
   const [orderProducts, setOrderProducts] = useState<Array<{
-    productId: string; productName: string; category: string; quantity: number; showDropdown?: boolean;
-  }>>([{ productId: "", productName: "", category: "", quantity: 1, showDropdown: false }]);
+    productId: string; productName: string; category: string; quantity: number | string; showDropdown?: boolean;
+  }>>([{ productId: "", productName: "", category: "", quantity: "", showDropdown: false }]);
 
   const [attachmentPreview, setAttachmentPreview] = useState("");
   const [attachmentBase64, setAttachmentBase64] = useState("");
@@ -360,15 +360,19 @@ function OrderContent() {
                   )}
                   <div>
                     <Label className="text-xs text-gray-500 font-medium">Quantity *</Label>
-                    <Input type="number" min="0" value={item.quantity} onChange={(e) => {
-                      const val = parseInt(e.target.value) || 0;
-                      if (val <= 0) {
-                        // Remove the row if quantity set to 0
-                        removeProductRow(idx);
-                      } else {
-                        updateProductRow(idx, "quantity", val);
-                      }
-                    }} className="text-sm mt-1 h-9 rounded-xl" />
+                    <Input type="number" min="0" max="500000" placeholder="Quantity (Ltr)" value={item.quantity}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          updateProductRow(idx, "quantity", "");
+                          return;
+                        }
+                        let num = parseInt(raw);
+                        if (isNaN(num) || num < 0) num = 0;
+                        if (num > 500000) num = 500000;
+                        updateProductRow(idx, "quantity", num);
+                      }}
+                      className="text-sm mt-1 h-9 rounded-xl" />
                   </div>
                 </div>
               );
