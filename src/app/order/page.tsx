@@ -326,8 +326,8 @@ function OrderContent() {
               return (
                 <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2 relative" style={{ zIndex: 100 - idx }}>
                   {orderProducts.length > 1 && (
-                    <button type="button" onClick={() => removeProductRow(idx)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-1">
-                      <Trash2 className="w-4 h-4" />
+                    <button type="button" onClick={() => removeProductRow(idx)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-2 rounded-full bg-transparent focus:outline-none">
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   )}
                   <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Product {idx + 1}</div>
@@ -360,7 +360,15 @@ function OrderContent() {
                   )}
                   <div>
                     <Label className="text-xs text-gray-500 font-medium">Quantity *</Label>
-                    <Input type="number" min="1" value={item.quantity} onChange={(e) => updateProductRow(idx, "quantity", parseInt(e.target.value) || 1)} className="text-sm mt-1 h-9 rounded-xl" />
+                    <Input type="number" min="0" value={item.quantity} onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      if (val <= 0) {
+                        // Remove the row if quantity set to 0
+                        removeProductRow(idx);
+                      } else {
+                        updateProductRow(idx, "quantity", val);
+                      }
+                    }} className="text-sm mt-1 h-9 rounded-xl" />
                   </div>
                 </div>
               );
