@@ -21,10 +21,18 @@ interface MonthData {
 
 const METRICS = [
   { key: "visits" as const, label: "Total Visits", bg: "blue" },
-  { key: "orders" as const, label: "Total Orders", bg: "emerald" },
-  { key: "qty" as const, label: "Total Qty Sold", bg: "amber" },
+  { key: "qty" as const, label: "Quantity", bg: "emerald" },
+  { key: "orders" as const, label: "Total Orders", bg: "amber" },
   { key: "activeDays" as const, label: "Active Days", bg: "teal" },
 ];
+
+function getDateFromTimestamp(d: { date: string; visits: number; orders: number; qty: number }): Date | null {
+  if (d.date) {
+    const parsed = new Date(d.date);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+}
 
 export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
   const months = useMemo<MonthData[]>(() => {
@@ -33,8 +41,9 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
     const monthMap: Record<string, MonthData> = {};
 
     report.dailySummary.forEach((d) => {
-      const date = new Date(d.date);
-      if (isNaN(date.getTime())) return;
+      const date = getDateFromTimestamp(d);
+      if (!date) return;
+
       const year = date.getFullYear().toString();
       const monthNum = String(date.getMonth() + 1).padStart(2, "0");
       const key = `${year}-${monthNum}`;
@@ -53,6 +62,17 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
       .sort(([a], [b]) => b.localeCompare(a))
       .slice(0, 3)
       .map(([, v]) => v);
+  }, [report?.dailySummary]);
+
+  const dateRange = useMemo(() => {
+    if (!report?.dailySummary || report.dailySummary.length === 0) return "";
+    const dates = report.dailySummary
+      .map((d) => getDateFromTimestamp(d))
+      .filter((d): d is Date => d !== null);
+    if (dates.length === 0) return "";
+    const earliest = new Date(Math.min(...dates.map((d) => d.getTime())));
+    const latest = new Date(Math.max(...dates.map((d) => d.getTime())));
+    return `${earliest.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} → ${latest.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
   }, [report?.dailySummary]);
 
   if (!report || months.length === 0) {
@@ -78,9 +98,9 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
           <BarChart3 className="w-4 h-4 text-indigo-500" />
           3-Month Sales Summary
         </CardTitle>
-        <p className="text-[10px] text-gray-400 font-medium">
-          {report.startDate} → {report.endDate}
-        </p>
+        {dateRange && (
+          <p className="text-[10px] text-gray-400 font-medium">{dateRange}</p>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {months.map((m) => (

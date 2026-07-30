@@ -1,19 +1,16 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Play, Pause, SkipForward, SkipBack } from "lucide-react";
 import type { RoutePoint } from "@/services/api";
 
 interface RouteMapProps {
   route: RoutePoint[];
-  /** When true, renders the side timeline panel alongside the map */
   showTimeline?: boolean;
-  /** Height class for the map container */
   heightClass?: string;
 }
 
-// Haversine distance in km between two lat/lng points
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -24,6 +21,24 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function parseTimeToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  try {
+    const d = new Date(timeStr);
+    if (isNaN(d.getTime())) return 0;
+    return d.getHours() * 60 + d.getMinutes();
+  } catch {
+    return 0;
+  }
+}
+
+function formatMinutes(totalMinutes: number): string {
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 export default function RouteMap({
   route,
   showTimeline = false,
@@ -32,11 +47,11 @@ export default function RouteMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const popupsRef = useRef<any[]>([]);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Precompute distances between consecutive stops
   const distances = route.map((point, idx) => {
     if (idx === 0) return 0;
     const prev = route[idx - 1];
@@ -50,6 +65,32 @@ export default function RouteMap({
 
   const totalDistance = distances.reduce((sum, d) => sum + d, 0);
 
+  const cumulativeMinutes = route.map((point, idx) => {
+    if (idx === 0) return 0;
+    const startMin = parseTimeToMinutes(route[0].time);
+    const currentMin = parseTimeToMinutes(point.time);
+    const diff = currentMin - startMin;
+    return diff >= 0 ? diff : 0;
+  });
+
+  const handleSetActive = useCallback((idx: number) => {
+    setActiveIdx(idx);
+    if (mapInstanceRef.current && markersRef.current[idx]) {
+      const point = route[idx];
+      const lat = Number(point.lat);
+      const lng = Number(point.lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
+      }
+      popupsRef.current.forEach((p, i) => {
+        if (p && i !== idx) p.close();
+      });
+      if (popupsRef.current[idx]) {
+        popupsRef.current[idx].open();
+      }
+    }
+  }, [route]);
+
   useEffect(() => {
     if (!mapRef.current || route.length === 0) return;
 
@@ -58,7 +99,6 @@ export default function RouteMap({
     const init = async () => {
       L = await import("leaflet");
 
-      // Fix default icon issue
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
@@ -66,7 +106,6 @@ export default function RouteMap({
         shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
       });
 
-      // Remove existing map
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -83,7 +122,6 @@ export default function RouteMap({
 
       L.control.zoom({ position: "topright" }).addTo(map);
 
-      // Numbered icons with color coding: start=blue, end=green, middle=gray, active=blue ring
       const createNumberIcon = (num: number, isStart: boolean, isEnd: boolean, isActive: boolean) => {
         const color = isStart ? "#2563eb" : isEnd ? "#16a34a" : "#6b7280";
         const size = isActive ? 34 : 28;
@@ -97,6 +135,7 @@ export default function RouteMap({
       };
 
       const markers: any[] = [];
+      const popups: any[] = [];
       const coords: [number, number][] = [];
 
       route.forEach((point, idx) => {
@@ -117,24 +156,41 @@ export default function RouteMap({
           })
           : "";
 
-        const distStr = idx > 0 && distances[idx] > 0 ? `${distances[idx].toFixed(2)} km from prev` : "Starting point";
+        const elapsedMin = cumulativeMinutes[idx];
+        const elapsedStr = elapsedMin > 0 ? `+${formatMinutes(elapsedMin)}` : "Start";
 
-        marker.bindPopup(`
-          <div style="font-family:sans-serif;min-width:170px">
-            <div style="font-size:14px;font-weight:bold;color:#1e40af">#${idx + 1} - ${point.name}</div>
-            <div style="font-size:11px;color:#6b7280;margin-top:3px">📍 ${point.area}</div>
-            <div style="font-size:11px;color:#6b7280;margin-top:1px">🕐 ${timeStr}</div>
-            <div style="font-size:11px;color:#2563eb;margin-top:1px">🛣️ ${distStr}</div>
+        const distStr = idx > 0 && distances[idx] > 0 ? `${distances[idx].toFixed(2)} km` : "Start";
+
+        const popup = L.popup({
+          offset: [0, -20],
+          closeButton: true,
+          autoClose: false,
+          closeOnClick: false,
+        }).setContent(`
+          <div style="font-family:sans-serif;min-width:170px;padding:2px">
+            <div style="font-size:13px;font-weight:bold;color:#1e40af">#${idx + 1} - ${point.name}</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px">📍 ${point.area}</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:2px">🕐 ${timeStr} <span style="color:#2563eb;font-weight:600">(${elapsedStr})</span></div>
+            <div style="font-size:11px;color:#2563eb;margin-top:2px">🛣️ ${distStr}</div>
           </div>
         `);
 
-        marker.on("click", () => setActiveIdx(idx));
+        marker.bindPopup(popup);
+
+        marker.on("click", () => {
+          popups.forEach((p, i) => {
+            if (p && i !== idx) p.close();
+          });
+          setActiveIdx(idx);
+        });
+
         markers.push(marker);
+        popups.push(popup);
       });
 
       markersRef.current = markers;
+      popupsRef.current = popups;
 
-      // Draw route lines with gradient effect
       if (coords.length > 1) {
         L.polyline(coords, {
           color: "#3b82f6",
@@ -143,7 +199,6 @@ export default function RouteMap({
           dashArray: "8, 6",
         }).addTo(map);
 
-        // Direction arrows at midpoints
         for (let i = 0; i < coords.length - 1; i++) {
           const from = coords[i];
           const to = coords[i + 1];
@@ -162,12 +217,10 @@ export default function RouteMap({
         }
       }
 
-      // Fit bounds
       if (coords.length > 0) {
         map.fitBounds(coords, { padding: [40, 40] });
       }
 
-      // Open first marker popup
       if (markers.length > 0) {
         markers[0].openPopup();
       }
@@ -183,9 +236,9 @@ export default function RouteMap({
         mapInstanceRef.current = null;
       }
     };
-  }, [route, distances]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, distances, cumulativeMinutes]);
 
-  // Fly to marker when activeIdx changes
   useEffect(() => {
     if (activeIdx === null || !mapInstanceRef.current || !markersRef.current[activeIdx]) return;
     const point = route[activeIdx];
@@ -194,11 +247,15 @@ export default function RouteMap({
     const lng = Number(point.lng);
     if (!isNaN(lat) && !isNaN(lng)) {
       mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
-      markersRef.current[activeIdx].openPopup();
+      popupsRef.current.forEach((p, i) => {
+        if (p && i !== activeIdx) p.close();
+      });
+      if (popupsRef.current[activeIdx]) {
+        popupsRef.current[activeIdx].open();
+      }
     }
   }, [activeIdx, route]);
 
-  // Route playback animation
   useEffect(() => {
     if (!isPlaying) {
       if (playbackTimerRef.current) {
@@ -248,8 +305,8 @@ export default function RouteMap({
 
   if (showTimeline) {
     return (
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="w-full md:w-3/5 relative">
+      <div className="flex flex-col gap-3">
+        <div className="w-full relative">
           <div className={`w-full ${heightClass} rounded-lg overflow-hidden relative`}>
             <link
               rel="stylesheet"
@@ -258,7 +315,6 @@ export default function RouteMap({
             <div ref={mapRef} className="h-full w-full" />
           </div>
 
-          {/* Playback controls overlay */}
           {route.length > 1 && (
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur rounded-full shadow-lg flex items-center gap-1 px-2 py-1.5 border border-gray-200">
               <button
@@ -287,10 +343,11 @@ export default function RouteMap({
             </div>
           )}
         </div>
-        <div className="w-full md:w-2/5 max-h-64 md:max-h-none overflow-y-auto bg-gray-50 rounded-lg p-2">
+
+        <div className="w-full max-h-80 overflow-y-auto bg-gray-50 rounded-lg p-2">
           <div className="flex items-center justify-between mb-2 px-1">
             <p className="text-xs font-semibold text-gray-500">ROUTE TIMELINE</p>
-            <p className="text-[10px] text-gray-400">{totalDistance.toFixed(2)} km total</p>
+            <p className="text-[10px] text-gray-400">{totalDistance.toFixed(2)} km total · {route.length} stops</p>
           </div>
           <div className="space-y-1">
             {route.map((point, idx) => {
@@ -305,29 +362,42 @@ export default function RouteMap({
               const isStart = idx === 0;
               const isEnd = idx === route.length - 1;
               const distFromPrev = distances[idx];
+              const elapsedMin = cumulativeMinutes[idx];
+              const elapsedStr = elapsedMin > 0 ? `+${formatMinutes(elapsedMin)}` : "Start";
+
               return (
                 <button
                   key={idx}
-                  onClick={() => setActiveIdx(idx)}
+                  onClick={() => handleSetActive(idx)}
                   className={`w-full text-left flex items-center gap-2 p-2 rounded-lg transition-colors ${isActive ? "bg-blue-100 ring-1 ring-blue-300" : "hover:bg-gray-100"
                     }`}
                 >
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${isStart ? "bg-blue-600" : isEnd ? "bg-green-600" : "bg-gray-500"
-                      }`}
-                  >
-                    {idx + 1}
+                  <div className="flex flex-col items-center shrink-0">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold ${isStart ? "bg-blue-600" : isEnd ? "bg-green-600" : "bg-gray-500"
+                        }`}
+                    >
+                      {idx + 1}
+                    </div>
+                    {idx < route.length - 1 && (
+                      <div className="w-0.5 h-4 bg-gray-200 mt-1" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-gray-900 truncate">{point.name}</p>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-[10px] text-gray-500 truncate">{point.area}</p>
                       {idx > 0 && distFromPrev > 0 && (
                         <span className="text-[9px] text-blue-500 shrink-0">· {distFromPrev.toFixed(1)}km</span>
                       )}
                     </div>
                   </div>
-                  {timeStr && <span className="text-[10px] text-gray-400 shrink-0">{timeStr}</span>}
+                  <div className="flex flex-col items-end shrink-0 gap-0.5">
+                    {timeStr && <span className="text-[10px] text-gray-500 font-medium">{timeStr}</span>}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isStart ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-500"}`}>
+                      {elapsedStr}
+                    </span>
+                  </div>
                 </button>
               );
             })}
