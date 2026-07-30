@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
-import { type ReportData, type ReportOrder } from "@/services/api";
+import { type ReportData } from "@/services/api";
+import { getOrderMonthYear } from "./orderUtils";
 
 interface ThreeMonthSummaryProps {
   report: ReportData | null;
@@ -20,27 +21,6 @@ interface MonthData {
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function getOrderMonth(order: ReportOrder): { month: number; year: number } | null {
-  if (order.orderMonth && order.orderYear) {
-    return { month: order.orderMonth, year: order.orderYear };
-  }
-  const dateStr = order.createdAt || order.date;
-  if (!dateStr) return null;
-
-  const d = new Date(dateStr);
-  if (!isNaN(d.getTime())) {
-    return { month: d.getMonth() + 1, year: d.getFullYear() };
-  }
-
-  const m = dateStr.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
-  if (m) {
-    const shortMonth: Record<string, number> = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-    if (shortMonth[m[2]]) return { month: shortMonth[m[2]], year: parseInt(m[3]) };
-  }
-
-  return null;
-}
-
 export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
   const months = useMemo<MonthData[]>(() => {
     if (!report?.orders || report.orders.length === 0) return [];
@@ -48,14 +28,13 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
     const monthMap: Record<string, MonthData> = {};
 
     report.orders.forEach((order) => {
-      const info = getOrderMonth(order);
+      const info = getOrderMonthYear(order);
       if (!info) return;
 
       const key = `${info.year}-${String(info.month).padStart(2, "0")}`;
 
       if (!monthMap[key]) {
-        const fullLabel = `${MONTH_NAMES[info.month - 1]} ${info.year}`;
-        monthMap[key] = { key, fullLabel, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
+        monthMap[key] = { key, fullLabel: `${MONTH_NAMES[info.month - 1]} ${info.year}`, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
       }
       monthMap[key].totalQty += order.quantity;
       monthMap[key].totalOrders += 1;
@@ -65,7 +44,7 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
       const productIds = new Set<string>();
       const customerIds = new Set<string>();
       report.orders.forEach((order) => {
-        const info = getOrderMonth(order);
+        const info = getOrderMonthYear(order);
         if (!info) return;
         if (`${info.year}-${String(info.month).padStart(2, "0")}` === data.key) {
           if (order.productId) productIds.add(order.productId);
