@@ -3,15 +3,14 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
-import { type ReportData } from "@/services/api";
+import { type ReportData, type ReportOrder } from "@/services/api";
 
 interface ThreeMonthSummaryProps {
   report: ReportData | null;
 }
 
 interface MonthData {
-  year: number;
-  month: number;
+  key: string;
   fullLabel: string;
   totalQty: number;
   totalOrders: number;
@@ -21,40 +20,54 @@ interface MonthData {
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+function getOrderMonth(order: ReportOrder): { month: number; year: number } | null {
+  if (order.orderMonth && order.orderYear) {
+    return { month: order.orderMonth, year: order.orderYear };
+  }
+  const dateStr = order.createdAt || order.date;
+  if (!dateStr) return null;
+
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return { month: d.getMonth() + 1, year: d.getFullYear() };
+  }
+
+  const m = dateStr.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+  if (m) {
+    const shortMonth: Record<string, number> = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+    if (shortMonth[m[2]]) return { month: shortMonth[m[2]], year: parseInt(m[3]) };
+  }
+
+  return null;
+}
+
 export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
   const months = useMemo<MonthData[]>(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-
     const monthMap: Record<string, MonthData> = {};
 
     report.orders.forEach((order) => {
-      const m = order.orderMonth || 0;
-      const y = order.orderYear || 0;
-      if (!m || !y) return;
+      const info = getOrderMonth(order);
+      if (!info) return;
 
-      const key = `${y}-${String(m).padStart(2, "0")}`;
+      const key = `${info.year}-${String(info.month).padStart(2, "0")}`;
 
       if (!monthMap[key]) {
-        const fullLabel = `${MONTH_NAMES[m - 1]} ${y}`;
-        monthMap[key] = { year: y, month: m, fullLabel, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
+        const fullLabel = `${MONTH_NAMES[info.month - 1]} ${info.year}`;
+        monthMap[key] = { key, fullLabel, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
       }
       monthMap[key].totalQty += order.quantity;
       monthMap[key].totalOrders += 1;
     });
 
     Object.values(monthMap).forEach((data) => {
-      const key = `${data.year}-${String(data.month).padStart(2, "0")}`;
       const productIds = new Set<string>();
       const customerIds = new Set<string>();
       report.orders.forEach((order) => {
-        const m = order.orderMonth || 0;
-        const y = order.orderYear || 0;
-        if (!m || !y) return;
-        if (`${y}-${String(m).padStart(2, "0")}` === key) {
+        const info = getOrderMonth(order);
+        if (!info) return;
+        if (`${info.year}-${String(info.month).padStart(2, "0")}` === data.key) {
           if (order.productId) productIds.add(order.productId);
           else if (order.productName) productIds.add(order.productName);
           if (order.customerId) customerIds.add(order.customerId);
@@ -65,10 +78,9 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
       data.uniqueCustomers = customerIds.size;
     });
 
-    return Object.entries(monthMap)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .slice(0, 3)
-      .map(([, v]) => v);
+    return Object.values(monthMap)
+      .sort((a, b) => b.key.localeCompare(a.key))
+      .slice(0, 3);
   }, [report?.orders]);
 
   if (!report || months.length === 0) {
@@ -97,7 +109,7 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {months.map((m) => (
-          <div key={`${m.year}-${m.month}`} className="space-y-2.5 border-l-2 border-indigo-200 pl-3">
+          <div key={m.key} className="space-y-2.5 border-l-2 border-indigo-200 pl-3">
             <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
               {m.fullLabel}
             </span>

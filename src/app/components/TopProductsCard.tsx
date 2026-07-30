@@ -3,24 +3,40 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Award } from "lucide-react";
-import { type ReportData } from "@/services/api";
+import { type ReportData, type ReportOrder } from "@/services/api";
 
 interface TopProductsCardProps {
   report: ReportData | null;
+}
+
+function isCurrentMonth(order: ReportOrder): boolean {
+  const now = new Date();
+  const curMonth = now.getMonth() + 1;
+  const curYear = now.getFullYear();
+
+  if (order.orderMonth && order.orderYear) {
+    return order.orderMonth === curMonth && order.orderYear === curYear;
+  }
+
+  const dateStr = order.createdAt || order.date;
+  if (!dateStr) return false;
+
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.getMonth() + 1 === curMonth && d.getFullYear() === curYear;
+  }
+
+  return false;
 }
 
 export function TopProductsCard({ report }: TopProductsCardProps) {
   const currentMonthProducts = useMemo(() => {
     if (!report?.orders || report.orders.length === 0) return [];
 
-    const now = new Date();
-    const curMonth = now.getMonth() + 1;
-    const curYear = now.getFullYear();
-
     const productMap: Record<string, { name: string; qty: number; count: number }> = {};
 
     report.orders.forEach((order) => {
-      if (order.orderMonth !== curMonth || order.orderYear !== curYear) return;
+      if (!isCurrentMonth(order)) return;
 
       const name = order.productName || "Unknown";
       if (!productMap[name]) {
