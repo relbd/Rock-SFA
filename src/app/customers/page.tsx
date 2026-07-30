@@ -107,22 +107,19 @@ function CustomerRegistrationContent() {
 
   function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = ev.target?.result as string; 
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas"); const maxW = 800;
-        const scale = img.width > maxW ? maxW / img.width : 1;
-        canvas.width = img.width * scale; canvas.height = img.height * scale;
-        const ctx = canvas.getContext("2d"); ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const compressed = canvas.toDataURL("image/jpeg", 0.7);
-        setPhotoPreview(compressed);
-        setPhotoBase64(compressed);
-      };
-      img.src = result;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas"); const maxW = 800;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      canvas.width = img.width * scale; canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d"); ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL("image/jpeg", 0.7);
+      setPhotoPreview(compressed);
+      setPhotoBase64(compressed);
+      URL.revokeObjectURL(objectUrl);
     };
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
   }
 
   function toggleBrand(brand: string) { setOilBrands((prev) => prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]); }
