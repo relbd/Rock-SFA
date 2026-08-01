@@ -238,7 +238,7 @@ function AttendanceContent() {
                 className="flex-1 w-full object-cover"
                 style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
               />
-              <div className="bg-black/80 flex justify-center items-center" style={{ paddingTop: 16, paddingBottom: "max(3rem, calc(env(safe-area-inset-bottom, 24px) + 16px))" }}>
+              <div className="bg-black/80 flex flex-col items-center" style={{ paddingTop: 12, paddingBottom: "max(5rem, calc(env(safe-area-inset-bottom, 34px) + 48px))" }}>
                 <button
                   onClick={takePhoto}
                   className="rounded-full bg-white border-4 border-blue-500 shadow-lg active:scale-90 transition-transform"
