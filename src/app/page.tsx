@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, Zap, XCircle, ArrowUp, ArrowDown, Minus, LogOut } from "lucide-react";
+import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, XCircle, LogOut } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData } from "@/services/api";
@@ -12,6 +12,7 @@ import { TopProductsCard } from "./components/TopProductsCard";
 import { TopCustomersCard } from "./components/TopCustomersCard";
 import { AttendanceHistoryCard } from "./components/AttendanceHistoryCard";
 import { DistributorQuantityCard } from "./components/DistributorQuantityCard";
+import { PerformanceOverview } from "./components/PerformanceOverview";
 import { computeAvgTimePerShop, formatMinutes } from "./map";
 
 const VISIT_TARGET = 20;
@@ -219,15 +220,7 @@ function DashboardContent() {
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
-  const todayConversionRate = data && data.visitCount > 0 ? (data.orderCount / data.visitCount) * 100 : 0;
 
-  const avgVisitsPerDay = report?.summary.avgVisitsPerDay || 0;
-  const avgOrdersPerDay = report && report.summary.activeDays > 0 ? report.summary.totalOrders / report.summary.activeDays : 0;
-  const avgQtyPerDay = report && report.summary.activeDays > 0 ? report.summary.totalOrderQty / report.summary.activeDays : 0;
-
-  const visitDiff = data ? data.visitCount - avgVisitsPerDay : 0;
-  const orderDiff = data ? data.orderCount - avgOrdersPerDay : 0;
-  const qtyDiff = data ? data.totalOrderQty - avgQtyPerDay : 0;
 
   if (loading) {
     return (
@@ -375,67 +368,8 @@ function DashboardContent() {
           ))}
         </div>
 
-        {/* Performance vs Monthly Average */}
-        <Card className="card-shadow border-0">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              Performance vs Monthly Average
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* Conversion Rate */}
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-3.5 mb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] text-gray-500 font-medium">Today&apos;s Conversion Rate</p>
-                  <p className="text-2xl font-bold text-amber-600">{todayConversionRate.toFixed(0)}%</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-gray-500 font-medium">Orders / Visits</p>
-                  <p className="text-sm font-semibold text-gray-700">{data?.orderCount || 0} / {data?.visitCount || 0}</p>
-                </div>
-              </div>
-              <div className="h-2 bg-white/60 rounded-full overflow-hidden mt-2.5">
-                <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full" style={{ width: `${Math.min(todayConversionRate, 100)}%` }} />
-              </div>
-            </div>
-
-            {/* Today vs Avg */}
-            <div className="space-y-2">
-              {[
-                { label: "Visits", today: data?.visitCount || 0, avg: avgVisitsPerDay, diff: visitDiff, color: "blue" },
-                { label: "Orders", today: data?.orderCount || 0, avg: avgOrdersPerDay, diff: orderDiff, color: "emerald" },
-                { label: "Qty Sold", today: data?.totalOrderQty || 0, avg: avgQtyPerDay, diff: qtyDiff, color: "amber" },
-              ].map((row) => {
-                const isUp = row.diff > 0;
-                const isDown = row.diff < 0;
-                const isFlat = row.diff === 0;
-                const diffPct = row.avg > 0 ? Math.abs((row.diff / row.avg) * 100) : 0;
-                return (
-                  <div key={row.label} className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
-                    <span className="text-xs font-semibold text-gray-700">{row.label}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-[9px] text-gray-400 font-medium">Today / Avg</p>
-                        <p className="text-xs font-bold text-gray-800">
-                          {row.today} <span className="text-gray-400 font-normal">/ {row.avg.toFixed(1)}</span>
-                        </p>
-                      </div>
-                      <div className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isUp ? "bg-emerald-100 text-emerald-700" : isDown ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
-                        {isUp ? <ArrowUp className="w-2.5 h-2.5" /> : isDown ? <ArrowDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
-                        {isFlat ? "0%" : `${diffPct.toFixed(0)}%`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {!report && (
-              <p className="text-[10px] text-gray-400 text-center mt-3">Monthly average unavailable</p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Performance Overview */}
+        <PerformanceOverview report={report} todayData={data ? { visits: data.visitCount, orders: data.orderCount, qty: data.totalOrderQty, distance: data.totalDistanceKm, clockIn: data.clockIn, clockOut: data.clockOut } : undefined} />
 
         {/* Visit Results */}
         <Card className="card-shadow border-0">
