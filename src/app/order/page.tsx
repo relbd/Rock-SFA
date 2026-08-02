@@ -140,13 +140,17 @@ function OrderContent() {
   const totalProducts = orderProducts.filter((p) => p.productId).length;
   const totalQuantity = orderProducts.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
 
-  const handleSubmit = async () => {
-    if (!email) return alert("Please select a Sales Officer");
-    if (!selectedCustomerId) return alert("Please select a Customer");
-    const validProducts = orderProducts.filter((p) => p.productId);
-    if (validProducts.length === 0) return alert("Please select at least one product");
-    if (!attachmentBase64) return alert("Please attach a memo document");
+  const submittingRef = useRef(false);
 
+  const handleSubmit = async () => {
+    if (submittingRef.current) return;
+    if (!email) { alert("Please select a Sales Officer"); return; }
+    if (!selectedCustomerId) { alert("Please select a Customer"); return; }
+    const validProducts = orderProducts.filter((p) => p.productId);
+    if (validProducts.length === 0) { alert("Please select at least one product"); return; }
+    if (!attachmentBase64) { alert("Please attach a memo document"); return; }
+
+    submittingRef.current = true;
     setSubmitting(true); setSubmitResult(null);
     try {
       const result = await api.submitOrder({
@@ -164,7 +168,7 @@ function OrderContent() {
       }
     } catch {
       setSubmitResult({ success: false, message: "Network error. Please try again." });
-    } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); submittingRef.current = false; }
   };
 
   if (loading) {
@@ -430,7 +434,7 @@ function OrderContent() {
         </Card>
 
         {/* Submit */}
-        <Button onClick={handleSubmit} disabled={submitting} className="w-full h-13 rounded-xl gradient-primary text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-lg">
+        <Button onClick={() => { if (window.confirm("Confirm place this order?")) handleSubmit(); }} disabled={submitting} className="w-full h-13 rounded-xl gradient-primary text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-lg">
           {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...</> : "Place Order"}
         </Button>
         <div className="h-4" />
