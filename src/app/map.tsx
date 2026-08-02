@@ -92,12 +92,10 @@ export default function RouteMap({
       if (!isNaN(lat) && !isNaN(lng)) {
         mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
       }
-      popupsRef.current.forEach((p, i) => {
-        if (p && i !== idx) p.close();
+      markersRef.current.forEach((m, i) => {
+        if (m && i !== idx) m.closePopup();
       });
-      if (popupsRef.current[idx]) {
-        popupsRef.current[idx].open();
-      }
+      markersRef.current[idx].openPopup();
     }
   }, [route]);
 
@@ -258,12 +256,10 @@ export default function RouteMap({
     const lng = Number(point.lng);
     if (!isNaN(lat) && !isNaN(lng)) {
       mapInstanceRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
-      popupsRef.current.forEach((p, i) => {
-        if (p && i !== activeIdx) p.close();
+      markersRef.current.forEach((m, i) => {
+        if (m && i !== activeIdx) m.closePopup();
       });
-      if (popupsRef.current[activeIdx]) {
-        popupsRef.current[activeIdx].open();
-      }
+      markersRef.current[activeIdx].openPopup();
     }
   }, [activeIdx, route]);
 

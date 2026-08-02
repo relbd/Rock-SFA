@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ShoppingCart, Package, Users, Droplets } from "lucide-react";
 import { type ReportData } from "@/services/api";
 import { getOrderMonthYear } from "./orderUtils";
 
@@ -26,6 +26,7 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
     if (!report?.orders || report.orders.length === 0) return [];
 
     const monthMap: Record<string, MonthData> = {};
+    const invoiceSetPerMonth: Record<string, Set<string>> = {};
 
     report.orders.forEach((order) => {
       const info = getOrderMonthYear(order);
@@ -35,12 +36,14 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
 
       if (!monthMap[key]) {
         monthMap[key] = { key, fullLabel: `${MONTH_NAMES[info.month - 1]} ${info.year}`, totalQty: 0, totalOrders: 0, uniqueProducts: 0, uniqueCustomers: 0 };
+        invoiceSetPerMonth[key] = new Set();
       }
       monthMap[key].totalQty += order.quantity;
-      monthMap[key].totalOrders += 1;
+      if (order.invoiceId) invoiceSetPerMonth[key].add(order.invoiceId);
     });
 
     Object.values(monthMap).forEach((data) => {
+      data.totalOrders = invoiceSetPerMonth[data.key]?.size || 0;
       const productIds = new Set<string>();
       const customerIds = new Set<string>();
       report.orders.forEach((order) => {
@@ -78,6 +81,9 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
     );
   }
 
+  const isLatest = (idx: number) => idx === 0;
+  const isPrev = (idx: number) => idx === 1;
+
   return (
     <Card className="card-shadow border-0">
       <CardHeader className="pb-2">
@@ -86,24 +92,37 @@ export function ThreeMonthSummary({ report }: ThreeMonthSummaryProps) {
           3-Month Sales Summary
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {months.map((m) => (
-          <div key={m.key} className="space-y-2.5 border-l-2 border-indigo-200 pl-3">
-            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-              {m.fullLabel}
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "Total Orders", value: m.totalOrders, bg: "blue" },
-                { label: "Quantity", value: m.totalQty, bg: "emerald" },
-                { label: "Unique Products", value: m.uniqueProducts, bg: "amber" },
-                { label: "Unique Customers", value: m.uniqueCustomers, bg: "violet" },
-              ].map((config) => (
-                <div key={config.label} className={`bg-${config.bg}-50 p-3 rounded-xl border border-${config.bg}-100 shadow-sm`}>
-                  <p className="text-[10px] text-gray-500 font-medium">{config.label}</p>
-                  <p className={`text-lg font-bold text-${config.bg}-600`}>{config.value}</p>
-                </div>
-              ))}
+      <CardContent className="space-y-3">
+        {months.map((m, idx) => (
+          <div key={m.key} className={`rounded-xl p-3 border ${isLatest(idx) ? "bg-blue-50 border-blue-200" : isPrev(idx) ? "bg-gray-50 border-gray-200" : "bg-white border-gray-100"}`}>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className={`text-xs font-bold px-2 py-0.5 rounded ${isLatest(idx) ? "bg-blue-600 text-white" : isPrev(idx) ? "bg-gray-500 text-white" : "bg-gray-200 text-gray-600"}`}>
+                {m.fullLabel}
+              </span>
+              {isLatest(idx) && <span className="text-[9px] text-blue-500 font-bold">LATEST</span>}
+              {isPrev(idx) && <span className="text-[9px] text-gray-400 font-bold">PREV</span>}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="text-center">
+                <ShoppingCart className="w-3.5 h-3.5 text-blue-500 mx-auto mb-0.5" />
+                <p className="text-base font-bold text-blue-600">{m.totalOrders}</p>
+                <p className="text-[9px] text-gray-500 font-medium">Orders</p>
+              </div>
+              <div className="text-center">
+                <Droplets className="w-3.5 h-3.5 text-emerald-500 mx-auto mb-0.5" />
+                <p className="text-base font-bold text-emerald-600">{Math.round(m.totalQty)}</p>
+                <p className="text-[9px] text-gray-500 font-medium">Qty (L)</p>
+              </div>
+              <div className="text-center">
+                <Package className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
+                <p className="text-base font-bold text-amber-600">{m.uniqueProducts}</p>
+                <p className="text-[9px] text-gray-500 font-medium">Products</p>
+              </div>
+              <div className="text-center">
+                <Users className="w-3.5 h-3.5 text-violet-500 mx-auto mb-0.5" />
+                <p className="text-base font-bold text-violet-600">{m.uniqueCustomers}</p>
+                <p className="text-[9px] text-gray-500 font-medium">Customers</p>
+              </div>
             </div>
           </div>
         ))}

@@ -6,13 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, XCircle, LogOut } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
-import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData } from "@/services/api";
+import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData, type ReportOrder } from "@/services/api";
 import { ThreeMonthSummary } from "./components/ThreeMonthSummary";
 import { TopProductsCard } from "./components/TopProductsCard";
 import { TopCustomersCard } from "./components/TopCustomersCard";
 import { AttendanceHistoryCard } from "./components/AttendanceHistoryCard";
 import { DistributorQuantityCard } from "./components/DistributorQuantityCard";
 import { PerformanceOverview } from "./components/PerformanceOverview";
+import { getOrderMonthYear } from "./components/orderUtils";
 import { computeAvgTimePerShop, formatMinutes } from "./map";
 
 const VISIT_TARGET = 20;
@@ -157,6 +158,62 @@ function MonthTrendChart({ data }: { data: Array<{ date: string; visits: number;
   );
 }
 
+function MonthlyOrderTabs({ data }: { data: { months: string[]; groups: Record<string, Record<string, ReportOrder[]>> } }) {
+  const [tab, setTab] = useState(data.months[0] || "");
+  const monthEntries = Object.entries(data.groups[tab] || {});
+  const totalQty = monthEntries.reduce((sum, [, items]) => sum + items.reduce((s, i) => s + i.quantity, 0), 0);
+
+  return (
+    <div>
+      <div className="flex gap-1.5 mb-3 overflow-x-auto">
+        {data.months.map((m) => (
+          <button
+            key={m}
+            onClick={() => setTab(m)}
+            className={`text-[11px] font-bold px-3 py-1.5 rounded-full shrink-0 transition-all ${tab === m ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="bg-emerald-50 rounded-xl px-3 py-1.5">
+          <span className="text-[10px] text-emerald-600 font-medium">{monthEntries.length} orders</span>
+        </div>
+        <div className="bg-blue-50 rounded-xl px-3 py-1.5">
+          <span className="text-[10px] text-blue-600 font-medium">Qty: {Math.round(totalQty)}</span>
+        </div>
+      </div>
+      <div className="max-h-96 overflow-auto space-y-2.5 pr-1">
+        {monthEntries.length > 0 ? monthEntries.map(([invoiceId, items]) => (
+          <div key={invoiceId} className="border border-gray-100 rounded-xl p-3 bg-white">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-blue-600">{invoiceId}</span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-600 font-semibold px-1.5 py-0.5 rounded-md">
+                  {items.length} item{items.length > 1 ? "s" : ""}
+                </span>
+              </div>
+              <span className="text-[10px] text-gray-400 font-medium">{formatTime(items[0].createdAt)}</span>
+            </div>
+            <p className="text-xs text-gray-700 font-semibold mb-1.5">{items[0].customerName}</p>
+            <div className="space-y-1">
+              {items.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[11px]">
+                  <span className="text-gray-500 truncate">{item.productName}</span>
+                  <span className="text-gray-700 font-semibold shrink-0 ml-2">x{item.quantity}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )) : (
+          <EmptyState icon={Package} label="No orders this month" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DashboardContent() {
   const { user, logout } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -212,6 +269,36 @@ function DashboardContent() {
     });
     return Object.entries(groups);
   }, [data?.orders]);
+
+  const reportMonthlyOrders = useMemo(() => {
+    if (!report?.orders || report.orders.length === 0) return { months: [] as string[], groups: {} as Record<string, Record<string, ReportOrder[]>> };
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    let prevMonth = curMonth - 1;
+    let prevYear = curYear;
+    if (prevMonth < 1) { prevMonth = 12; prevYear--; }
+
+    const monthGroups: Record<string, Record<string, typeof report.orders>> = {};
+    const monthOrder: string[] = [];
+
+    const SHORT = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    report.orders.forEach((order) => {
+      const info = getOrderMonthYear(order);
+      if (!info) return;
+      const isCur = info.month === curMonth && info.year === curYear;
+      const isPrev = info.month === prevMonth && info.year === prevYear;
+      if (!isCur && !isPrev) return;
+      const key = `${SHORT[info.month]} ${info.year}`;
+      if (!monthGroups[key]) { monthGroups[key] = {}; monthOrder.push(key); }
+      const inv = order.invoiceId || "unknown";
+      if (!monthGroups[key][inv]) monthGroups[key][inv] = [];
+      monthGroups[key][inv].push(order);
+    });
+
+    return { months: monthOrder, groups: monthGroups };
+  }, [report?.orders]);
 
   const initials = user?.employeeName?.split(" ").map((n) => n[0]).join("") || "?";
   const visitPct = data ? Math.min(Math.round((data.visitCount / VISIT_TARGET) * 100), 100) : 0;
@@ -501,7 +588,9 @@ function DashboardContent() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {groupedOrders.length > 0 ? (
+            {reportMonthlyOrders.months.length > 0 ? (
+              <MonthlyOrderTabs data={reportMonthlyOrders} />
+            ) : groupedOrders.length > 0 ? (
               <div className="max-h-96 overflow-auto space-y-2.5 pr-1">
                 {groupedOrders.map(([invoiceId, items]) => (
                   <div key={invoiceId} className="border border-gray-100 rounded-xl p-3 bg-white">
