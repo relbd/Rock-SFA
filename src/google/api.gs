@@ -598,6 +598,22 @@ function handleSubmitVisit(data) {
     var headers = allData[0] || [];
     var col = toMap(headers);
 
+    // ---- Duplicate check: same customer + email + today ----
+    var todayStr = Utilities.formatDate(new Date(), "Asia/Dhaka", "dd-MMM-yyyy");
+    var dupEmail = String(data.email || "").trim().toLowerCase();
+    var dupCustId = String(data.customerId || "").trim();
+    for (var r = 1; r < allData.length; r++) {
+      var rowEmail = String(allData[r][col["Email"]] || "").trim().toLowerCase();
+      var rowCustId = String(allData[r][col["Customer Code"]] || "").trim();
+      var rowDate = String(allData[r][col["Date"]] || "").trim();
+      if (rowEmail === dupEmail && rowCustId === dupCustId && rowDate === todayStr) {
+        return createResponse({
+          success: false,
+          message: "Visit for this customer already recorded today"
+        }, 400);
+      }
+    }
+
     // ---- Generate Visit ID ----
     var lastId = "VIS100000";
     for (var r = 1; r < allData.length; r++) {
@@ -1267,6 +1283,25 @@ function handleSubmitOrder(data) {
     var allData = sheet.getDataRange().getValues();
     var headers = allData[0] || [];
     var col = toMap(headers);
+
+    // ---- Duplicate check: same customer + email + today within last 2 minutes ----
+    var now = new Date();
+    var dupEmail = String(data.email || "").trim().toLowerCase();
+    var dupCustId = String(data.customerId || "").trim();
+    for (var r = 1; r < allData.length; r++) {
+      var rowEmail = String(allData[r][col["Email"]] || "").trim().toLowerCase();
+      var rowCustId = String(allData[r][col["Customer ID"]] || "").trim();
+      var rowTs = allData[r][col["Timestamp"]];
+      if (rowEmail === dupEmail && rowCustId === dupCustId && rowTs) {
+        var rowTime = new Date(rowTs).getTime();
+        if (!isNaN(rowTime) && (now.getTime() - rowTime) < 120000) {
+          return createResponse({
+            success: false,
+            message: "Duplicate order detected. Please wait before submitting again."
+          }, 400);
+        }
+      }
+    }
 
     // Generate Invoice ID
     var lastId = "ORD100000";

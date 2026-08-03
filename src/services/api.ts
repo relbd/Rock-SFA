@@ -39,6 +39,19 @@ async function post<T>(payload: Record<string, unknown>): Promise<T> {
   throw lastError || new Error("Request failed after retries");
 }
 
+async function postSingle<T>(payload: Record<string, unknown>): Promise<T> {
+  const res = await fetchWithTimeout(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("API error " + res.status + ": " + text.slice(0, 200));
+  }
+  return res.json();
+}
+
 async function get<T>(params: Record<string, string>): Promise<T> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -397,11 +410,11 @@ export const api = {
   },
 
   clockIn(userId: string, lat: number, lng: number, imageBase64?: string) {
-    return post<AttendanceResponse>({ action: "clockIn", userId, lat, lng, imageBase64 });
+    return postSingle<AttendanceResponse>({ action: "clockIn", userId, lat, lng, imageBase64 });
   },
 
   clockOut(userId: string, lat: number, lng: number, imageBase64?: string) {
-    return post<AttendanceResponse>({ action: "clockOut", userId, lat, lng, imageBase64 });
+    return postSingle<AttendanceResponse>({ action: "clockOut", userId, lat, lng, imageBase64 });
   },
 
   getMasterData() {
@@ -421,11 +434,11 @@ export const api = {
   },
 
   submitVisit(data: VisitData) {
-    return post<VisitResponse>({ action: "submitVisit", ...data });
+    return postSingle<VisitResponse>({ action: "submitVisit", ...data });
   },
 
   submitOrder(data: OrderData) {
-    return post<OrderResponse>({ action: "submitOrder", ...data });
+    return postSingle<OrderResponse>({ action: "submitOrder", ...data });
   },
 
   getDashboardData(email: string) {
@@ -461,6 +474,6 @@ export const api = {
     gpsAccuracy?: number;
     shopPhotoBase64?: string;
   }) {
-    return post<CustomerRegistrationResponse>({ action: "registerCustomer", ...data });
+    return postSingle<CustomerRegistrationResponse>({ action: "registerCustomer", ...data });
   },
 };
