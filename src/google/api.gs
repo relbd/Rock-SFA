@@ -495,36 +495,76 @@ function handleAttendance(data, type) {
 // ==========================================
 
 function getCustomers() {
-  var ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
-  var sheet = ss.getSheetByName("Customers");
-  if (!sheet) {
-    return createResponse({ success: false, message: "Customers tab not found in Admin Sheet" }, 404);
-  }
-  var allData = sheet.getDataRange().getValues();
-  var headers = allData[0] || [];
-  var col = toMap(headers);
-
   var customers = [];
-  for (var i = 1; i < allData.length; i++) {
-    var r = allData[i];
-    customers.push({
-      customerId: String(r[col["Customer Code"]] || ""),
-      shopName: String(r[col["Customer Name"]] || ""),
-      ownerName: "",
-      ownerContact: String(r[col["Phone"]] || ""),
-      marketName: "",
-      district: String(r[col["City"]] || ""),
-      area: String(r[col["Area"]] || ""),
-      territory: "",
-      shopType: String(r[col["Customer Type"]] || ""),
-      fullAddress: "",
-      latitude: "",
-      longitude: "",
-      salesOfficer: "",
-      email: "",
-      status: "Active",
-    });
-  }
+  var seenIds = {};
+
+  // ---- Source 1: Admin Sheet "Customers" tab (legacy) ----
+  try {
+    var ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
+    var sheet = ss.getSheetByName("Customers");
+    if (sheet) {
+      var allData = sheet.getDataRange().getValues();
+      var headers = allData[0] || [];
+      var col = toMap(headers);
+      for (var i = 1; i < allData.length; i++) {
+        var r = allData[i];
+        var cid = String(r[col["Customer Code"]] || "").trim();
+        if (!cid) continue;
+        seenIds[cid] = true;
+        customers.push({
+          customerId: cid,
+          shopName: String(r[col["Customer Name"]] || ""),
+          ownerName: "",
+          ownerContact: String(r[col["Phone"]] || ""),
+          marketName: "",
+          district: String(r[col["City"]] || ""),
+          area: String(r[col["Area"]] || ""),
+          territory: "",
+          shopType: String(r[col["Customer Type"]] || ""),
+          fullAddress: "",
+          latitude: "",
+          longitude: "",
+          salesOfficer: "",
+          email: "",
+          status: "Active",
+        });
+      }
+    }
+  } catch (e) { /* admin sheet not available */ }
+
+  // ---- Source 2: Customer_Master Sheet (new registrations) ----
+  try {
+    var custSs = SpreadsheetApp.openById(CUSTOMER_SHEET_ID);
+    var custSheet = custSs.getSheets()[0];
+    if (custSheet) {
+      var custData = custSheet.getDataRange().getValues();
+      var custHeaders = custData[0] || [];
+      var custCol = toMap(custHeaders);
+      for (var i = 1; i < custData.length; i++) {
+        var r = custData[i];
+        var cid = String(r[custCol["Customer ID"]] || "").trim();
+        if (!cid || seenIds[cid]) continue;
+        seenIds[cid] = true;
+        customers.push({
+          customerId: cid,
+          shopName: String(r[custCol["Shop Name"]] || ""),
+          ownerName: String(r[custCol["Owner Name"]] || ""),
+          ownerContact: String(r[custCol["Owner Contact Number"]] || ""),
+          marketName: String(r[custCol["Market Name"]] || ""),
+          district: String(r[custCol["District"]] || ""),
+          area: String(r[custCol["Area"]] || ""),
+          territory: String(r[custCol["Territory"]] || ""),
+          shopType: String(r[custCol["Shop Type"]] || ""),
+          fullAddress: String(r[custCol["Full Address"]] || ""),
+          latitude: String(r[custCol["Latitude"]] || ""),
+          longitude: String(r[custCol["Longitude"]] || ""),
+          salesOfficer: String(r[custCol["Sales Officer"]] || ""),
+          email: String(r[custCol["Email Address"]] || ""),
+          status: String(r[custCol["Status"]] || "Active"),
+        });
+      }
+    }
+  } catch (e) { /* customer master sheet not available */ }
 
   return createResponse({ success: true, data: customers });
 }
