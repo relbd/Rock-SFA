@@ -15,16 +15,49 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 const STORAGE_KEY = "rock_sfa_user";
+const PRESENCE_KEY = "rock_sfa_presence";
 const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
+const HEARTBEAT_INTERVAL = 30000;
+
+function reportPresence(user: AuthUser) {
+  try {
+    const raw = localStorage.getItem(PRESENCE_KEY);
+    const store: Record<string, unknown> = raw ? JSON.parse(raw) : {};
+    store[user.userId] = {
+      userId: user.userId,
+      employeeName: user.employeeName,
+      employeeCode: user.employeeCode,
+      position: user.position,
+      area: user.area,
+      territory: user.territory,
+      lastSeen: Date.now(),
+    };
+    localStorage.setItem(PRESENCE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore
+  }
+}
+
+function removePresence(userId: string) {
+  try {
+    const raw = localStorage.getItem(PRESENCE_KEY);
+    const store: Record<string, unknown> = raw ? JSON.parse(raw) : {};
+    delete store[userId];
+    localStorage.setItem(PRESENCE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(() => {
+    if (user) removePresence(user.userId);
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -52,6 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, SESSION_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [user, logout]);
+
+  useEffect(() => {
+    if (!user) return;
+    reportPresence(user);
+    const interval = setInterval(() => reportPresence(user), HEARTBEAT_INTERVAL);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     const res = await api.login(email, password);

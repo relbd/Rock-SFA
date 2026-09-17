@@ -219,30 +219,45 @@ function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reportLoading, setReportLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [MapComponent, setMapComponent] = useState<React.ComponentType<{ route: RoutePoint[]; showTimeline?: boolean; heightClass?: string }> | null>(null);
 
   const fetchData = useCallback(async (email: string, isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    // Fast-path: Load essential dashboard data (today's visits, target, stats, route)
     try {
-      const [dashRes, reportRes] = await Promise.all([
-        api.getDashboardData(email),
-        api.getReportData(email).catch(() => null),
-      ]);
+      const dashRes = await api.getDashboardData(email);
       if (dashRes.success && dashRes.data) {
         setData(dashRes.data);
         setError(null);
       } else {
         setError(dashRes.message || "Failed to load dashboard data");
       }
-      if (reportRes?.success && reportRes.data) {
-        setReport(reportRes.data);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to connect to server");
     } finally {
       setLoading(false);
+    }
+
+    // Non-blocking background path: Load historical report analytics
+    setReportLoading(true);
+    try {
+      const reportRes = await api.getReportData(email);
+      if (reportRes?.success && reportRes.data) {
+        setReport(reportRes.data);
+      }
+    } catch {
+      // Non-fatal background fetch
+    } finally {
+      setReportLoading(false);
       setRefreshing(false);
     }
   }, []);
@@ -298,7 +313,7 @@ function DashboardContent() {
     });
 
     return { months: monthOrder, groups: monthGroups };
-  }, [report?.orders]);
+  }, [report]);
 
   const initials = user?.employeeName?.split(" ").map((n) => n[0]).join("") || "?";
   const visitPct = data ? Math.min(Math.round((data.visitCount / VISIT_TARGET) * 100), 100) : 0;
@@ -366,6 +381,14 @@ function DashboardContent() {
             <button onClick={handleRefresh} disabled={refreshing} className="text-[11px] font-semibold text-red-700 underline shrink-0 disabled:opacity-50">
               Retry
             </button>
+          </div>
+        )}
+
+        {/* Background Report Loading Banner */}
+        {reportLoading && !error && (
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 flex items-center gap-2 card-shadow text-xs text-blue-700 font-medium">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
+            <span>Loading 3-month history & analytics...</span>
           </div>
         )}
 

@@ -716,13 +716,36 @@ function handleSubmitVisit(data) {
 // DASHBOARD DATA
 // ==========================================
 
+// Helper: Robust check if a date cell matches target Date
+function isSameDateDhaka(cellVal, targetDateObj) {
+  if (!cellVal) return false;
+  var targetStr = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd-MMM-yyyy");
+  var targetIso = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "yyyy-MM-dd");
+  
+  if (cellVal instanceof Date) {
+    return Utilities.formatDate(cellVal, "Asia/Dhaka", "dd-MMM-yyyy") === targetStr;
+  }
+  
+  var s = String(cellVal).trim();
+  if (!s) return false;
+  if (s === targetStr || s.indexOf(targetStr) !== -1 || s.indexOf(targetIso) !== -1) return true;
+  
+  var parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    return Utilities.formatDate(parsed, "Asia/Dhaka", "dd-MMM-yyyy") === targetStr;
+  }
+  
+  return false;
+}
+
 function getDashboardData(data) {
   var email = String(data.email || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
   if (!email) {
     return createResponse({ success: false, message: "Email is required" }, 400);
   }
 
-  var today = Utilities.formatDate(new Date(), "Asia/Dhaka", "dd-MMM-yyyy");
+  var nowObj = new Date();
+  var today = Utilities.formatDate(nowObj, "Asia/Dhaka", "dd-MMM-yyyy");
 
   // --- Visits today for this user ---
   var visits = [];
@@ -736,19 +759,16 @@ function getDashboardData(data) {
     for (var i = 1; i < vData.length; i++) {
       var r = vData[i];
       var vEmail = String(r[vCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
-      
-      var rawDate = r[vCol["Date"]];
-      var vDate = "";
-      if (rawDate instanceof Date) {
-        vDate = Utilities.formatDate(rawDate, "Asia/Dhaka", "dd-MMM-yyyy");
-      } else {
-        vDate = String(rawDate || "").trim();
-      }
+      if (vEmail !== email) continue;
 
-      if (vEmail === email && vDate === today) {
+      var rawDate = r[vCol["Date"]];
+      var rawTs = r[vCol["Timestamp"]];
+      var isTodayVisit = isSameDateDhaka(rawDate, nowObj) || isSameDateDhaka(rawTs, nowObj);
+
+      if (isTodayVisit) {
         visits.push({
           visitId: String(r[vCol["Visit ID"]] || ""),
-          timestamp: r[vCol["Timestamp"]] instanceof Date ? r[vCol["Timestamp"]].toISOString() : String(r[vCol["Timestamp"]] || ""),
+          timestamp: rawTs instanceof Date ? rawTs.toISOString() : String(rawTs || ""),
           customerCode: String(r[vCol["Customer Code"]] || ""),
           customerName: String(r[vCol["Customer Name"]] || ""),
           area: String(r[vCol["Area"]] || ""),
@@ -778,22 +798,12 @@ function getDashboardData(data) {
     for (var j = 1; j < oData.length; j++) {
       var or = oData[j];
       var oEmail = String(or[oCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
-      
-      var rawCreatedAt = or[oCol["Created At"]];
-      var oDateStr = "";
-      var oCreatedAtIso = "";
-      
-      if (rawCreatedAt instanceof Date) {
-        oDateStr = Utilities.formatDate(rawCreatedAt, "Asia/Dhaka", "dd-MMM-yyyy");
-        oCreatedAtIso = rawCreatedAt.toISOString();
-      } else {
-        oCreatedAtIso = String(rawCreatedAt || "");
-        oDateStr = oCreatedAtIso; // Fallback string matching
-      }
+      if (oEmail !== email) continue;
 
-      var isTodayOrder = (oDateStr === today) || (oCreatedAtIso.indexOf(today) !== -1);
+      var rawCreatedAt = or[oCol["Created At"]] || or[oCol["Timestamp"]];
+      var isTodayOrder = isSameDateDhaka(rawCreatedAt, nowObj);
 
-      if (oEmail === email && isTodayOrder) {
+      if (isTodayOrder) {
         var qty = Number(or[oCol["Quantity"]]) || 0;
         totalOrderQty += qty;
         orders.push({
@@ -801,7 +811,7 @@ function getDashboardData(data) {
           customerName: String(or[oCol["Customer Name"]] || ""),
           productName: String(or[oCol["Product Name"]] || ""),
           quantity: qty,
-          createdAt: oCreatedAtIso
+          createdAt: rawCreatedAt instanceof Date ? rawCreatedAt.toISOString() : String(rawCreatedAt || "")
         });
       }
     }
@@ -818,17 +828,12 @@ function getDashboardData(data) {
       for (var k = 1; k < lData.length; k++) {
         var lr = lData[k];
         var lUserId = String(lr[1] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+        if (lUserId !== email) continue;
+
         var lType = String(lr[2] || "").trim();
         var lTs = lr[3];
-        var lDateStr = "";
         
-        if (lTs instanceof Date) {
-          lDateStr = Utilities.formatDate(lTs, "Asia/Dhaka", "dd-MMM-yyyy");
-        } else {
-          lDateStr = String(lTs || "").trim();
-        }
-        
-        if (lUserId === email && lDateStr === today) {
+        if (isSameDateDhaka(lTs, nowObj)) {
           if (lType === "Clock In" && !clockIn) clockIn = lTs instanceof Date ? lTs.toISOString() : String(lTs);
           if (lType === "Clock Out") clockOut = lTs instanceof Date ? lTs.toISOString() : String(lTs);
         }
@@ -900,8 +905,26 @@ function getReportData(data) {
   var dateSet = {};
   var cursor = new Date(startDate);
   while (cursor <= endDate) {
-    dateSet[Utilities.formatDate(cursor, "Asia/Dhaka", "dd-MMM-yyyy")] = true;
+    var dStr = Utilities.formatDate(cursor, "Asia/Dhaka", "dd-MMM-yyyy");
+    var isoStr = Utilities.formatDate(cursor, "Asia/Dhaka", "yyyy-MM-dd");
+    dateSet[dStr] = true;
+    dateSet[isoStr] = true;
     cursor.setDate(cursor.getDate() + 1);
+  }
+
+  function isDateInRange(val) {
+    if (!val) return false;
+    if (val instanceof Date) {
+      return !!dateSet[Utilities.formatDate(val, "Asia/Dhaka", "dd-MMM-yyyy")];
+    }
+    var s = String(val).trim();
+    if (!s) return false;
+    if (dateSet[s]) return true;
+    var parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return !!dateSet[Utilities.formatDate(parsed, "Asia/Dhaka", "dd-MMM-yyyy")];
+    }
+    return false;
   }
 
   // --- Visits in range ---
@@ -925,20 +948,11 @@ function getReportData(data) {
       if (vEmail !== email) continue;
 
       var rawDate = r[vCol["Date"]];
-      var vDate = "";
-      if (rawDate instanceof Date) {
-        vDate = Utilities.formatDate(rawDate, "Asia/Dhaka", "dd-MMM-yyyy");
-      } else {
-        vDate = String(rawDate || "").trim();
-      }
+      var rawTs = r[vCol["Timestamp"]];
+      if (!isDateInRange(rawDate) && !isDateInRange(rawTs)) continue;
 
-      if (!vDate) {
-        // Fallback: derive from Timestamp column
-        var ts = r[vCol["Timestamp"]];
-        if (ts instanceof Date) vDate = Utilities.formatDate(ts, "Asia/Dhaka", "dd-MMM-yyyy");
-      }
-
-      if (!dateSet[vDate]) continue;
+      var vDate = rawDate instanceof Date ? Utilities.formatDate(rawDate, "Asia/Dhaka", "dd-MMM-yyyy") : String(rawDate || "").trim();
+      if (!vDate && rawTs instanceof Date) vDate = Utilities.formatDate(rawTs, "Asia/Dhaka", "dd-MMM-yyyy");
 
       var lat = parseFloat(r[vCol["Latitude"]]);
       var lng = parseFloat(r[vCol["Longitude"]]);
@@ -1019,14 +1033,9 @@ function getReportData(data) {
       if (oEmail !== email) continue;
 
       var oTs = or[oCol["Created At"]] || or[oCol["Timestamp"]];
-      var oDateStr = "";
-      if (oTs instanceof Date) {
-        oDateStr = Utilities.formatDate(oTs, "Asia/Dhaka", "dd-MMM-yyyy");
-      } else {
-        oDateStr = String(oTs || "");
-      }
+      if (!isDateInRange(oTs)) continue;
 
-      if (!dateSet[oDateStr]) continue;
+      var oDateStr = oTs instanceof Date ? Utilities.formatDate(oTs, "Asia/Dhaka", "dd-MMM-yyyy") : String(oTs || "");
 
       var qty = Number(or[oCol["Quantity"]]) || 0;
       totalOrderQty += qty;
@@ -1080,17 +1089,13 @@ function getReportData(data) {
       for (var k = 1; k < lData.length; k++) {
         var lr = lData[k];
         var lUserId = String(lr[1] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+        if (lUserId !== email) continue;
+
         var lType = String(lr[2] || "").trim();
         var lTs = lr[3];
-        var lDateStr = "";
-        if (lTs instanceof Date) {
-          lDateStr = Utilities.formatDate(lTs, "Asia/Dhaka", "dd-MMM-yyyy");
-        } else {
-          lDateStr = String(lTs || "");
-        }
+        if (!isDateInRange(lTs)) continue;
 
-        if (lUserId !== email) continue;
-        if (!dateSet[lDateStr]) continue;
+        var lDateStr = lTs instanceof Date ? Utilities.formatDate(lTs, "Asia/Dhaka", "dd-MMM-yyyy") : String(lTs || "");
 
         if (lType === "Clock In") totalClockIns++;
 

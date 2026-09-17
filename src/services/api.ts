@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyttzuwsVNdtctYMUy7Jk2aeyklrhVAjMmKSrWscKDMDT4Dw9hEY_q4TGUEY4iCTfJG/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwQmCzLtldNF-DRfA7VdgRdTo5dYCDB72rWq9gCeEJCC8ky1lX82A3nKydIpQSbf8uy/exec";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
@@ -404,6 +404,24 @@ export interface ReportResponse {
   message?: string;
 }
 
+export interface ActiveUser {
+  userId: string;
+  employeeName: string;
+  employeeCode: string;
+  position: string;
+  area: string;
+  territory: string;
+  lastSeen: number;
+  isOnline: boolean;
+}
+
+export interface PresenceResponse {
+  success: boolean;
+  users?: ActiveUser[];
+  totalCount?: number;
+  onlineCount?: number;
+}
+
 export const api = {
   login(email: string, password: string) {
     return post<LoginResponse>({ action: "login", email, password });
@@ -475,5 +493,13 @@ export const api = {
     shopPhotoBase64?: string;
   }) {
     return postSingle<CustomerRegistrationResponse>({ action: "registerCustomer", ...data });
+  },
+
+  reportPresence(user: { userId: string; employeeName: string; employeeCode: string; position: string; area: string; territory: string }) {
+    return postSingle<{ success: boolean }>({ action: "reportPresence", ...user, timestamp: Date.now() });
+  },
+
+  getActiveUsers() {
+    return post<PresenceResponse>({ action: "getActiveUsers" });
   },
 };
