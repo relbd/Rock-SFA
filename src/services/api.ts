@@ -2,14 +2,26 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwQmCzLtldNF-DRfA7VdgRd
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
-const FETCH_TIMEOUT_MS = 30000;
+const FETCH_TIMEOUT_MS = 45000;
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeout = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const timer = setTimeout(() => {
+    try {
+      controller.abort();
+    } catch {
+      // ignore
+    }
+  }, timeout);
+
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     return res;
+  } catch (err) {
+    if (err instanceof Error && (err.name === "AbortError" || err.message.includes("aborted"))) {
+      throw new Error("Connection timed out. Please check network connection and try again.");
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }

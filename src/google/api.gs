@@ -738,6 +738,24 @@ function isSameDateDhaka(cellVal, targetDateObj) {
   return false;
 }
 
+// Helper: Efficiently fetch header + last N rows of a sheet to avoid 30s Apps Script timeouts
+function getRecentSheetValues(sheet, maxRowsToScan) {
+  if (!sheet) return { headers: [], data: [] };
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return { headers: [], data: [] };
+  
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (lastRow < 2) return { headers: headers, data: [] };
+
+  var limit = maxRowsToScan || 500;
+  var startRow = Math.max(2, lastRow - limit + 1);
+  var numRows = lastRow - startRow + 1;
+
+  var rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+  return { headers: headers, data: rows };
+}
+
 function getDashboardData(data) {
   var email = String(data.email || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
   if (!email) {
@@ -747,16 +765,16 @@ function getDashboardData(data) {
   var nowObj = new Date();
   var today = Utilities.formatDate(nowObj, "Asia/Dhaka", "dd-MMM-yyyy");
 
-  // --- Visits today for this user ---
+  // --- Visits today for this user (fast scan of last 500 rows) ---
   var visits = [];
   try {
     var vss = SpreadsheetApp.openById(VISIT_SHEET_ID);
     var vSheet = vss.getSheets()[0];
-    var vData = vSheet.getDataRange().getValues();
-    var vHeaders = vData[0] || [];
-    var vCol = toMap(vHeaders);
+    var vRecent = getRecentSheetValues(vSheet, 500);
+    var vData = vRecent.data;
+    var vCol = toMap(vRecent.headers);
 
-    for (var i = 1; i < vData.length; i++) {
+    for (var i = 0; i < vData.length; i++) {
       var r = vData[i];
       var vEmail = String(r[vCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
       if (vEmail !== email) continue;
@@ -785,17 +803,17 @@ function getDashboardData(data) {
     }
   } catch (e) { /* visit sheet not found */ }
 
-  // --- Orders today for this user ---
+  // --- Orders today for this user (fast scan of last 500 rows) ---
   var orders = [];
   var totalOrderQty = 0;
   try {
     var oss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
     var oSheet = oss.getSheetByName("Sec Orders");
-    var oData = oSheet.getDataRange().getValues();
-    var oHeaders = oData[0] || [];
-    var oCol = toMap(oHeaders);
+    var oRecent = getRecentSheetValues(oSheet, 500);
+    var oData = oRecent.data;
+    var oCol = toMap(oRecent.headers);
 
-    for (var j = 1; j < oData.length; j++) {
+    for (var j = 0; j < oData.length; j++) {
       var or = oData[j];
       var oEmail = String(or[oCol["Email"]] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
       if (oEmail !== email) continue;
@@ -817,15 +835,16 @@ function getDashboardData(data) {
     }
   } catch (e) { /* orders sheet not found */ }
 
-  // --- Attendance today ---
+  // --- Attendance today (fast scan of last 500 rows) ---
   var clockIn = "";
   var clockOut = "";
   try {
     var lss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
     var lSheet = lss.getSheetByName("Logs");
     if (lSheet) {
-      var lData = lSheet.getDataRange().getValues();
-      for (var k = 1; k < lData.length; k++) {
+      var lRecent = getRecentSheetValues(lSheet, 500);
+      var lData = lRecent.data;
+      for (var k = 0; k < lData.length; k++) {
         var lr = lData[k];
         var lUserId = String(lr[1] || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
         if (lUserId !== email) continue;
