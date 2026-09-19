@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, XCircle, LogOut } from "lucide-react";
+import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, XCircle, LogOut, Shield } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData, type ReportOrder } from "@/services/api";
@@ -350,16 +350,26 @@ function DashboardContent() {
               onClick={handleRefresh}
               disabled={refreshing}
               aria-label="Refresh dashboard"
+              title="Refresh"
               className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/30 disabled:opacity-50 active:scale-95 transition-all"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
+            <Link
+              href="/admin"
+              aria-label="CMS Panel"
+              title="CMS Panel"
+              className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-white border border-white/30 active:scale-95 transition-all hover:bg-white/30"
+            >
+              <Shield className="w-4 h-4" />
+            </Link>
             <div className="h-11 w-11 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm border border-white/30">
               {initials}
             </div>
             <button
               onClick={logout}
               aria-label="Logout"
+              title="Logout"
               className="h-10 w-10 rounded-full bg-red-500/20 flex items-center justify-center text-white border border-red-400/30 active:scale-95 transition-all hover:bg-red-500/30"
             >
               <LogOut className="w-4 h-4" />

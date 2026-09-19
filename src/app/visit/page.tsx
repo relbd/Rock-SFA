@@ -52,7 +52,7 @@ function SectionHeader({ icon: Icon, title, color }: { icon: React.ComponentType
 }
 
 function VisitContent() {
-  useAuth();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLDivElement>(null);
   const customerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +149,25 @@ function VisitContent() {
       .catch(function () { setMessage("Failed to load data"); setMessageType("error"); })
       .finally(function () { setLoading(false); });
   }, []);
+
+  useEffect(function () {
+    if (user?.email) {
+      setEmail(user.email);
+      setEmailSearch(user.email);
+      if (user.employeeCode) setSalesOfficer(user.employeeCode);
+      if (user.employeeName) setSalesPersonName(user.employeeName);
+      if (user.territory) setEmpTerritory(user.territory);
+
+      if (masterData) {
+        const emp = masterData.employees.find(function (e) { return e.email === user.email; });
+        if (emp) {
+          setSalesOfficer(emp.employeeCode);
+          setSalesPersonName(emp.employeeName);
+          setEmpTerritory(emp.territory);
+        }
+      }
+    }
+  }, [user, masterData]);
 
   useEffect(function () {
     function handleClick(e: MouseEvent) {

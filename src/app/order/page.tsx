@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { api, type CustomerListItem, type MasterData, type ProductItem, type SubDBItem } from "@/services/api";
 
 function OrderContent() {
-  useAuth();
+  const { user } = useAuth();
   const emailRef = useRef<HTMLDivElement>(null);
   const customerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +79,25 @@ function OrderContent() {
     load();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (user?.email) {
+      setEmail(user.email);
+      if (user.employeeCode) setSalesOfficer(user.employeeCode);
+      if (user.employeeName) setSalesPersonName(user.employeeName);
+      if (user.territory) setEmpTerritory(user.territory);
+      setEmailSearch(`${user.employeeName || user.email} (${user.email})`);
+
+      if (masterData) {
+        const emp = masterData.employees.find((e) => e.email === user.email);
+        if (emp) {
+          setSalesOfficer(emp.employeeCode);
+          setSalesPersonName(emp.employeeName);
+          setEmpTerritory(emp.territory);
+        }
+      }
+    }
+  }, [user, masterData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

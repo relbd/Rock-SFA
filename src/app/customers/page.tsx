@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Camera, MapPin, Check, X, Loader2, Search, UserPlus, Store, Tag, Map, Image } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
+import { useAuth } from "@/hooks/useAuth";
 import { api, type MasterData } from "@/services/api";
 
 const OIL_BRANDS = ["Castrol", "Mobil", "Shell", "Total", "BP", "Caltex", "Gulf", "ENOC", "ADNOC", "Motul", "LIQUI MOLY", "Other"];
@@ -25,6 +26,7 @@ function SectionHeader({ icon: Icon, title, color }: { icon: React.ComponentType
 }
 
 function CustomerRegistrationContent() {
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [loadingMaster, setLoadingMaster] = useState(true);
@@ -78,6 +80,18 @@ function CustomerRegistrationContent() {
       .catch(() => { setMessage("Failed to load master data"); setMessageType("error"); })
       .finally(() => { setLoadingMaster(false); });
   }, []);
+
+  useEffect(() => {
+    if (user?.email) {
+      setEmail(user.email);
+      setEmailSearch(user.email);
+      if (user.employeeName) setSalesOfficer(user.employeeName);
+      if (masterData) {
+        const emp = masterData.employees.find((e) => e.email === user.email);
+        if (emp) setSalesOfficer(emp.employeeName);
+      }
+    }
+  }, [user, masterData]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) { if (emailRef.current && !emailRef.current.contains(e.target as Node)) setShowEmailDropdown(false); }

@@ -88,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
+    api.prefetchData();
     reportPresence(user);
     const interval = setInterval(() => reportPresence(user), HEARTBEAT_INTERVAL);
     return () => clearInterval(interval);
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userWithTs = { ...res.user, _loginTs: Date.now() };
       setUser(userWithTs as unknown as AuthUser);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userWithTs));
+      api.prefetchData();
     }
     return res;
   };

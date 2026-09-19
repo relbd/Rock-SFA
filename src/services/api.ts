@@ -434,6 +434,86 @@ export interface PresenceResponse {
   onlineCount?: number;
 }
 
+const memoryCache: Record<string, { timestamp: number; data: unknown }> = {};
+
+function invalidateCache(key?: string) {
+  if (key) {
+    delete memoryCache[key];
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+      } catch {
+        // ignore storage errors
+      }
+    }
+  } else {
+    Object.keys(memoryCache).forEach((k) => delete memoryCache[k]);
+    if (typeof window !== "undefined") {
+      try {
+        ["cache_master_data", "cache_customers", "cache_products", "cache_sub_dbs"].forEach((k) => {
+          sessionStorage.removeItem(k);
+          localStorage.removeItem(k);
+        });
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }
+}
+
+async function getCachedOrFetch<T>(
+  key: string,
+  ttlMs: number,
+  fetchFn: () => Promise<T>,
+  forceRefresh = false
+): Promise<T> {
+  const now = Date.now();
+  if (!forceRefresh && memoryCache[key] && now - memoryCache[key].timestamp < ttlMs) {
+    return memoryCache[key].data as T;
+  }
+
+  if (!forceRefresh && typeof window !== "undefined") {
+    try {
+      const stored = sessionStorage.getItem(key) || localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (now - parsed.timestamp < ttlMs) {
+          memoryCache[key] = parsed;
+          if (now - parsed.timestamp > ttlMs / 2) {
+            fetchFn().then((res) => {
+              if (res && (res as Record<string, unknown>).success) {
+                memoryCache[key] = { timestamp: Date.now(), data: res };
+                try {
+                  sessionStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), data: res }));
+                  localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), data: res }));
+                } catch { /* ignore */ }
+              }
+            }).catch(() => {});
+          }
+          return parsed.data as T;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const result = await fetchFn();
+  if (result && (result as Record<string, unknown>).success) {
+    memoryCache[key] = { timestamp: now, data: result };
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem(key, JSON.stringify({ timestamp: now, data: result }));
+        localStorage.setItem(key, JSON.stringify({ timestamp: now, data: result }));
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return result;
+}
+
 export const api = {
   login(email: string, password: string) {
     return post<LoginResponse>({ action: "login", email, password });
@@ -447,28 +527,52 @@ export const api = {
     return postSingle<AttendanceResponse>({ action: "clockOut", userId, lat, lng, imageBase64 });
   },
 
-  getMasterData() {
-    return post<MasterDataResponse>({ action: "getMasterData" });
+  getMasterData(forceRefresh = false) {
+    return getCachedOrFetch<MasterDataResponse>(
+      "cache_master_data",
+      30 * 60 * 1000,
+      () => post<MasterDataResponse>({ action: "getMasterData" }),
+      forceRefresh
+    );
   },
 
-  getCustomers() {
-    return post<CustomerListResponse>({ action: "getCustomers" });
+  getCustomers(forceRefresh = false) {
+    return getCachedOrFetch<CustomerListResponse>(
+      "cache_customers",
+      15 * 60 * 1000,
+      () => post<CustomerListResponse>({ action: "getCustomers" }),
+      forceRefresh
+    );
   },
 
-  getProducts() {
-    return post<ProductListResponse>({ action: "getProducts" });
+  getProducts(forceRefresh = false) {
+    return getCachedOrFetch<ProductListResponse>(
+      "cache_products",
+      30 * 60 * 1000,
+      () => post<ProductListResponse>({ action: "getProducts" }),
+      forceRefresh
+    );
   },
 
-  getSubDBs() {
-    return post<SubDBListResponse>({ action: "getSubDBs" });
+  getSubDBs(forceRefresh = false) {
+    return getCachedOrFetch<SubDBListResponse>(
+      "cache_sub_dbs",
+      30 * 60 * 1000,
+      () => post<SubDBListResponse>({ action: "getSubDBs" }),
+      forceRefresh
+    );
   },
 
-  submitVisit(data: VisitData) {
-    return postSingle<VisitResponse>({ action: "submitVisit", ...data });
+  async submitVisit(data: VisitData) {
+    const res = await postSingle<VisitResponse>({ action: "submitVisit", ...data });
+    if (res.success) invalidateCache("cache_customers");
+    return res;
   },
 
-  submitOrder(data: OrderData) {
-    return postSingle<OrderResponse>({ action: "submitOrder", ...data });
+  async submitOrder(data: OrderData) {
+    const res = await postSingle<OrderResponse>({ action: "submitOrder", ...data });
+    if (res.success) invalidateCache("cache_customers");
+    return res;
   },
 
   getDashboardData(email: string) {
@@ -479,7 +583,7 @@ export const api = {
     return post<ReportResponse>({ action: "getReportData", email, startDate, endDate });
   },
 
-  registerCustomer(data: {
+  async registerCustomer(data: {
     email: string;
     district: string;
     area: string;
@@ -504,7 +608,9 @@ export const api = {
     gpsAccuracy?: number;
     shopPhotoBase64?: string;
   }) {
-    return postSingle<CustomerRegistrationResponse>({ action: "registerCustomer", ...data });
+    const res = await postSingle<CustomerRegistrationResponse>({ action: "registerCustomer", ...data });
+    if (res.success) invalidateCache("cache_customers");
+    return res;
   },
 
   reportPresence(user: { userId: string; employeeName: string; employeeCode: string; position: string; area: string; territory: string }) {
@@ -513,5 +619,16 @@ export const api = {
 
   getActiveUsers() {
     return post<PresenceResponse>({ action: "getActiveUsers" });
+  },
+
+  prefetchData() {
+    this.getMasterData().catch(() => {});
+    this.getCustomers().catch(() => {});
+    this.getProducts().catch(() => {});
+    this.getSubDBs().catch(() => {});
+  },
+
+  clearCache() {
+    invalidateCache();
   },
 };
