@@ -716,30 +716,61 @@ function handleSubmitVisit(data) {
 // DASHBOARD DATA
 // ==========================================
 
-// Helper: Robust check if a date cell matches target Date
+// Helper: Robust check if a date cell matches target Date in Asia/Dhaka
 function isSameDateDhaka(cellVal, targetDateObj) {
   if (!cellVal) return false;
+  if (!targetDateObj) targetDateObj = new Date();
+
   var targetStr = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd-MMM-yyyy");
   var targetIso = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "yyyy-MM-dd");
-  
+  var targetDmySlash = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd/MM/yyyy");
+  var targetDmyDash = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd-MM-yyyy");
+
   if (cellVal instanceof Date) {
     return Utilities.formatDate(cellVal, "Asia/Dhaka", "dd-MMM-yyyy") === targetStr;
   }
   
   var s = String(cellVal).trim();
   if (!s) return false;
-  if (s === targetStr || s.indexOf(targetStr) !== -1 || s.indexOf(targetIso) !== -1) return true;
-  
+  var sLower = s.toLowerCase();
+
+  if (sLower === targetStr.toLowerCase() ||
+      sLower === targetIso.toLowerCase() ||
+      sLower === targetDmySlash.toLowerCase() ||
+      sLower === targetDmyDash.toLowerCase()) {
+    return true;
+  }
+
+  if (sLower.indexOf(targetStr.toLowerCase()) !== -1 ||
+      sLower.indexOf(targetIso.toLowerCase()) !== -1 ||
+      sLower.indexOf(targetDmySlash.toLowerCase()) !== -1 ||
+      sLower.indexOf(targetDmyDash.toLowerCase()) !== -1) {
+    return true;
+  }
+
+  var match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (match) {
+    var d = parseInt(match[1], 10);
+    var m = parseInt(match[2], 10);
+    var y = parseInt(match[3], 10);
+    var targetD = parseInt(Utilities.formatDate(targetDateObj, "Asia/Dhaka", "d"), 10);
+    var targetM = parseInt(Utilities.formatDate(targetDateObj, "Asia/Dhaka", "M"), 10);
+    var targetY = parseInt(Utilities.formatDate(targetDateObj, "Asia/Dhaka", "yyyy"), 10);
+    if (d === targetD && m === targetM && y === targetY) {
+      return true;
+    }
+  }
+
   var parsed = new Date(s);
   if (!isNaN(parsed.getTime())) {
     return Utilities.formatDate(parsed, "Asia/Dhaka", "dd-MMM-yyyy") === targetStr;
   }
-  
+
   return false;
 }
 
-// Helper: Efficiently fetch header + last N rows of a sheet to avoid 30s Apps Script timeouts
-function getRecentSheetValues(sheet, maxRowsToScan) {
+// Helper: Efficiently fetch all rows of TODAY without timeouts or missing morning rows
+function getTodaySheetValues(sheet, preferredColNames, fallbackLimit) {
   if (!sheet) return { headers: [], data: [] };
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
@@ -748,12 +779,84 @@ function getRecentSheetValues(sheet, maxRowsToScan) {
   var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   if (lastRow < 2) return { headers: headers, data: [] };
 
-  var limit = maxRowsToScan || 500;
-  var startRow = Math.max(2, lastRow - limit + 1);
-  var numRows = lastRow - startRow + 1;
+  // If sheet is relatively small (<= 2000 rows), read all rows safely
+  if (lastRow <= 2000) {
+    var allRows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    return { headers: headers, data: allRows };
+  }
 
+  var minScan = fallbackLimit || 3500;
+  var colMap = toMap(headers);
+  var nowObj = new Date();
+  
+  // Find date or timestamp column index (1-based for getRange)
+  var targetColIdx = -1;
+  var names = preferredColNames || ["Date", "Timestamp", "Created At"];
+  for (var i = 0; i < names.length; i++) {
+    var key = names[i].toLowerCase();
+    for (var hKey in colMap) {
+      if (hKey === key || hKey.indexOf(key) !== -1) {
+        targetColIdx = colMap[hKey] + 1; // 1-based
+        break;
+      }
+    }
+    if (targetColIdx !== -1) break;
+  }
+
+  var startRow = Math.max(2, lastRow - minScan + 1);
+
+  // If target column found, scan single column from bottom-up in chunks to find exact start of today
+  if (targetColIdx !== -1) {
+    var chunkSize = 3000;
+    var currentEnd = lastRow;
+    var foundEarliestRow = -1;
+
+    while (currentEnd >= 2) {
+      var chunkStart = Math.max(2, currentEnd - chunkSize + 1);
+      var chunkLen = currentEnd - chunkStart + 1;
+      var colVals = sheet.getRange(chunkStart, targetColIdx, chunkLen, 1).getValues();
+
+      var foundInChunk = false;
+      var reachedPast = false;
+      var streakNonToday = 0;
+
+      for (var c = colVals.length - 1; c >= 0; c--) {
+        if (isSameDateDhaka(colVals[c][0], nowObj)) {
+          foundEarliestRow = chunkStart + c;
+          foundInChunk = true;
+          streakNonToday = 0;
+        } else if (foundEarliestRow !== -1) {
+          streakNonToday++;
+          if (streakNonToday >= 25) {
+            reachedPast = true;
+            break;
+          }
+        }
+      }
+
+      if (reachedPast) {
+        break;
+      }
+      if (!foundInChunk && foundEarliestRow === -1) {
+        break;
+      }
+      currentEnd = chunkStart - 1;
+    }
+
+    if (foundEarliestRow !== -1) {
+      // Add safety buffer of 50 rows before the first today visit
+      startRow = Math.max(2, foundEarliestRow - 50);
+    }
+  }
+
+  var numRows = lastRow - startRow + 1;
   var rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
   return { headers: headers, data: rows };
+}
+
+// Keep getRecentSheetValues as a backward-compatible wrapper with higher default limit
+function getRecentSheetValues(sheet, maxRowsToScan) {
+  return getTodaySheetValues(sheet, ["Date", "Timestamp", "Created At"], maxRowsToScan || 3500);
 }
 
 function getDashboardData(data) {
@@ -765,12 +868,12 @@ function getDashboardData(data) {
   var nowObj = new Date();
   var today = Utilities.formatDate(nowObj, "Asia/Dhaka", "dd-MMM-yyyy");
 
-  // --- Visits today for this user (fast scan of last 500 rows) ---
+  // --- Visits today for this user (scans all rows of today) ---
   var visits = [];
   try {
     var vss = SpreadsheetApp.openById(VISIT_SHEET_ID);
     var vSheet = vss.getSheets()[0];
-    var vRecent = getRecentSheetValues(vSheet, 500);
+    var vRecent = getTodaySheetValues(vSheet, ["Date", "Timestamp"], 3500);
     var vData = vRecent.data;
     var vCol = toMap(vRecent.headers);
 
@@ -803,13 +906,13 @@ function getDashboardData(data) {
     }
   } catch (e) { /* visit sheet not found */ }
 
-  // --- Orders today for this user (fast scan of last 500 rows) ---
+  // --- Orders today for this user (scans all rows of today) ---
   var orders = [];
   var totalOrderQty = 0;
   try {
     var oss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
     var oSheet = oss.getSheetByName("Sec Orders");
-    var oRecent = getRecentSheetValues(oSheet, 500);
+    var oRecent = getTodaySheetValues(oSheet, ["Created At", "Timestamp"], 3500);
     var oData = oRecent.data;
     var oCol = toMap(oRecent.headers);
 
@@ -835,14 +938,14 @@ function getDashboardData(data) {
     }
   } catch (e) { /* orders sheet not found */ }
 
-  // --- Attendance today (fast scan of last 500 rows) ---
+  // --- Attendance today (scans all rows of today) ---
   var clockIn = "";
   var clockOut = "";
   try {
     var lss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
     var lSheet = lss.getSheetByName("Logs");
     if (lSheet) {
-      var lRecent = getRecentSheetValues(lSheet, 500);
+      var lRecent = getTodaySheetValues(lSheet, ["Timestamp"], 3500);
       var lData = lRecent.data;
       for (var k = 0; k < lData.length; k++) {
         var lr = lData[k];

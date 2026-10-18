@@ -180,6 +180,30 @@ function OrderContent() {
       });
       if (result.success) {
         setSubmitResult({ success: true, message: result.message || "Order placed successfully!" });
+
+        // Sync to local today storage so orders immediately and reliably reflect on dashboard
+        try {
+          const userEmail = (email || user?.email || "").toLowerCase();
+          if (userEmail) {
+            const todayKey = `sfa_today_orders_${userEmail}`;
+            const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+            const stored = JSON.parse(localStorage.getItem(todayKey) || '{"date":"","orders":[]}');
+            const localOrders = stored.date === todayStr && Array.isArray(stored.orders) ? stored.orders : [];
+            validProducts.forEach((p) => {
+              localOrders.push({
+                invoiceId: result.invoiceId || `ORD${Date.now()}`,
+                customerName: customerName,
+                productName: p.productName,
+                quantity: Number(p.quantity) || 0,
+                createdAt: new Date().toISOString(),
+              });
+            });
+            localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, orders: localOrders }));
+          }
+        } catch {
+          // ignore localStorage error
+        }
+
         setOrderProducts([{ productId: "", productName: "", category: "", quantity: 1, showDropdown: false }]);
         setAttachmentPreview(""); setAttachmentBase64("");
       } else {

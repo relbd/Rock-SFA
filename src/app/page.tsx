@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, ShoppingCart, Route, Clock, CheckCircle, Navigation, Target, TrendingUp, Package, RefreshCw, AlertCircle, Store, UserPlus, Activity, XCircle, LogOut, Shield } from "lucide-react";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
-import { api, type DashboardData, type DashboardOrder, type RoutePoint, type ReportData, type ReportOrder } from "@/services/api";
+import { api, type DashboardData, type DashboardVisit, type DashboardOrder, type RoutePoint, type ReportData, type ReportOrder } from "@/services/api";
 import { ThreeMonthSummary } from "./components/ThreeMonthSummary";
 import { TopProductsCard } from "./components/TopProductsCard";
 import { TopCustomersCard } from "./components/TopCustomersCard";
@@ -15,6 +15,118 @@ import { DistributorQuantityCard } from "./components/DistributorQuantityCard";
 import { PerformanceOverview } from "./components/PerformanceOverview";
 import { getOrderMonthYear } from "./components/orderUtils";
 import { computeAvgTimePerShop, formatMinutes } from "./map";
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function reconcileWithLocalTodayData(serverData: DashboardData, userEmail: string): DashboardData {
+  if (typeof window === "undefined" || !userEmail) return serverData;
+  try {
+    const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+    const normalizedEmail = userEmail.toLowerCase().trim();
+
+    // 1. Reconcile visits
+    const visitKey = `sfa_today_visits_${normalizedEmail}`;
+    const rawVisits = localStorage.getItem(visitKey);
+    const finalVisits = [...(serverData.visits || [])];
+
+    if (rawVisits) {
+      const parsed = JSON.parse(rawVisits);
+      if (parsed.date === todayStr && Array.isArray(parsed.visits) && parsed.visits.length > 0) {
+        const serverVisitIds = new Set(finalVisits.map((v) => String(v.visitId || "").trim()).filter(Boolean));
+        const serverCustKeys = new Set(
+          finalVisits.map((v) => `${String(v.customerCode || "").trim()}_${String(v.timestamp || "").slice(0, 16)}`)
+        );
+
+        parsed.visits.forEach((lv: DashboardVisit) => {
+          const vId = String(lv.visitId || "").trim();
+          const custKey = `${String(lv.customerCode || "").trim()}_${String(lv.timestamp || "").slice(0, 16)}`;
+          if ((vId && serverVisitIds.has(vId)) || serverCustKeys.has(custKey)) {
+            return;
+          }
+          finalVisits.push(lv);
+        });
+      } else if (parsed.date && parsed.date !== todayStr) {
+        localStorage.removeItem(visitKey);
+      }
+    }
+
+    // Sort visits chronologically so morning visits are always at the top
+    finalVisits.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    // 2. Reconcile orders
+    const orderKey = `sfa_today_orders_${normalizedEmail}`;
+    const rawOrders = localStorage.getItem(orderKey);
+    const finalOrders = [...(serverData.orders || [])];
+
+    if (rawOrders) {
+      const parsed = JSON.parse(rawOrders);
+      if (parsed.date === todayStr && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+        const serverOrderKeys = new Set(
+          finalOrders.map((o) => `${String(o.invoiceId || "").trim()}_${String(o.productName || "").trim()}`)
+        );
+        parsed.orders.forEach((lo: DashboardOrder) => {
+          const key = `${String(lo.invoiceId || "").trim()}_${String(lo.productName || "").trim()}`;
+          if (!serverOrderKeys.has(key)) {
+            finalOrders.push(lo);
+          }
+        });
+      } else if (parsed.date && parsed.date !== todayStr) {
+        localStorage.removeItem(orderKey);
+      }
+    }
+
+    // Recompute route and distance if local visits were merged
+    const validCoords: RoutePoint[] = [];
+    finalVisits.forEach((v) => {
+      const lat = parseFloat(v.latitude);
+      const lng = parseFloat(v.longitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        validCoords.push({
+          lat,
+          lng,
+          name: v.customerName,
+          time: v.timestamp,
+          area: v.area || v.city || "",
+        });
+      }
+    });
+
+    let totalDist = serverData.totalDistanceKm || 0;
+    if (validCoords.length > (serverData.route?.length || 0)) {
+      let dist = 0;
+      for (let i = 1; i < validCoords.length; i++) {
+        dist += haversineKm(validCoords[i - 1].lat, validCoords[i - 1].lng, validCoords[i].lat, validCoords[i].lng);
+      }
+      totalDist = Math.round(dist * 100) / 100;
+    }
+
+    const areasSet = new Set(finalVisits.map((v) => v.area || v.city).filter(Boolean));
+    const totalOrderQty = finalOrders.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0);
+
+    return {
+      ...serverData,
+      visits: finalVisits,
+      visitCount: finalVisits.length,
+      orders: finalOrders,
+      orderCount: finalOrders.length,
+      totalOrderQty: totalOrderQty > 0 ? totalOrderQty : serverData.totalOrderQty,
+      route: validCoords.length > 0 ? validCoords : serverData.route,
+      totalDistanceKm: totalDist,
+      areasVisited: Array.from(areasSet),
+    };
+  } catch {
+    return serverData;
+  }
+}
 
 const VISIT_TARGET = 20;
 
@@ -236,12 +348,58 @@ function DashboardContent() {
     try {
       const dashRes = await api.getDashboardData(email);
       if (dashRes.success && dashRes.data) {
-        setData(dashRes.data);
+        const reconciled = reconcileWithLocalTodayData(dashRes.data, email);
+        setData(reconciled);
         setError(null);
       } else {
-        setError(dashRes.message || "Failed to load dashboard data");
+        // Fallback to local data if server returns an error
+        const localOnly = reconcileWithLocalTodayData(
+          {
+            today: new Date().toLocaleDateString("en-CA"),
+            visits: [],
+            visitCount: 0,
+            orders: [],
+            orderCount: 0,
+            totalOrderQty: 0,
+            clockIn: "",
+            clockOut: "",
+            route: [],
+            totalDistanceKm: 0,
+            areasVisited: [],
+          },
+          email
+        );
+        if (localOnly.visitCount > 0) {
+          setData(localOnly);
+        } else {
+          setError(dashRes.message || "Failed to load dashboard data");
+        }
       }
     } catch (err) {
+      // Offline fallback: check if we have local today data saved on device
+      try {
+        const localOnly = reconcileWithLocalTodayData(
+          {
+            today: new Date().toLocaleDateString("en-CA"),
+            visits: [],
+            visitCount: 0,
+            orders: [],
+            orderCount: 0,
+            totalOrderQty: 0,
+            clockIn: "",
+            clockOut: "",
+            route: [],
+            totalDistanceKm: 0,
+            areasVisited: [],
+          },
+          email
+        );
+        if (localOnly.visitCount > 0) {
+          setData(localOnly);
+          setError("Network offline: displaying visits recorded on this device.");
+          return;
+        }
+      } catch { /* ignore */ }
       setError(err instanceof Error ? err.message : "Unable to connect to server");
     } finally {
       setLoading(false);

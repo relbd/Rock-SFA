@@ -331,6 +331,36 @@ function VisitContent() {
       if (res.success) {
         setMessageType("success");
         setMessage("Visit " + res.visitId + " recorded successfully!");
+
+        // Sync to local today storage so it immediately and reliably reflects on dashboard
+        try {
+          const userEmail = (email || user?.email || "").toLowerCase();
+          if (userEmail) {
+            const todayKey = `sfa_today_visits_${userEmail}`;
+            const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+            const stored = JSON.parse(localStorage.getItem(todayKey) || '{"date":"","visits":[]}');
+            const localVisits = stored.date === todayStr && Array.isArray(stored.visits) ? stored.visits : [];
+            localVisits.push({
+              visitId: res.visitId || `VIS${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              customerCode: selectedCustomerId,
+              customerName: customerName,
+              area: customerArea,
+              city: customerDistrict,
+              latitude: gpsLat || "",
+              longitude: gpsLng || "",
+              brandFocus: brandFocus.join(", "),
+              totalQuantity: Number(totalQuantity) || 0,
+              visitResult: distance !== null ? (distance <= 100 ? "Inside Radius" : "Outside Radius") : "Completed",
+              orderNotReceived: orderNotReceived || "",
+              marketName: marketName || "",
+            });
+            localStorage.setItem(todayKey, JSON.stringify({ date: todayStr, visits: localVisits }));
+          }
+        } catch {
+          // ignore localStorage error
+        }
+
         setEmail(""); setEmailSearch(""); setSalesOfficer(""); setSalesPersonName(""); setEmpTerritory("");
         setSelectedCustomerId(""); setCustomerSearch(""); setCustomerName(""); setCustomerPhone("");
         setCustomerDistrict(""); setCustomerArea(""); setCustomerType(""); setMarketName("");
