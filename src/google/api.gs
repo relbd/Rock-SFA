@@ -166,14 +166,33 @@ function handleLogin(data) {
         return createResponse({ success: false, message: "User account is inactive or disabled" }, 401);
       }
 
-      // Check Password against both display value and raw value (handles numeric formatting e.g. 320,203 or 320203)
-      var cellPassDisplay = String(dRow[passCol] !== undefined ? dRow[passCol] : "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
-      var cellPassRaw = String(rRow[passCol] !== undefined ? rRow[passCol] : "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
+      // Check Password against both display value and raw value
+      // Handles: numeric formatting (320,203 / 320.203 / 3.20203E+5), invisible chars, locale separators
+      var passColVal = passCol !== -1 ? dRow[passCol] : undefined;
+      var passColRaw = passCol !== -1 ? rRow[passCol] : undefined;
+      var cellPassDisplay = String(passColVal !== undefined && passColVal !== null ? passColVal : "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
+      var cellPassRaw;
+      if (passColRaw instanceof Date) {
+        // If Sheets auto-parsed the password as a date, use the display value instead
+        cellPassRaw = cellPassDisplay;
+      } else {
+        cellPassRaw = String(passColRaw !== undefined && passColRaw !== null ? passColRaw : "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
+      }
 
-      var isPassMatch = (cellPassDisplay === inputPass || cellPassRaw === inputPass ||
+      // Normalize: strip ALL non-alphanumeric characters for catch-all comparison
+      var normInput = inputPass.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      var normDisplay = cellPassDisplay.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      var normRaw = cellPassRaw.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
+      var isPassMatch = (cellPassDisplay === inputPass ||
+                         cellPassRaw === inputPass ||
                          cellPassDisplay.replace(/,/g, "") === inputPass ||
-                         cellPassDisplay.replace(/[\s\u00A0]+/g, "") === inputPass ||
-                         String(Number(cellPassRaw)) === inputPass);
+                         cellPassDisplay.replace(/\./g, "") === inputPass ||
+                         cellPassDisplay.replace(/[\s\u00A0,\.]+/g, "") === inputPass ||
+                         cellPassRaw.replace(/[\s\u00A0,\.]+/g, "") === inputPass ||
+                         (typeof passColRaw === "number" && String(passColRaw) === inputPass) ||
+                         (typeof passColRaw === "number" && String(Math.round(passColRaw)) === inputPass) ||
+                         (normInput && normInput.length > 0 && (normDisplay === normInput || normRaw === normInput)));
 
       if (isPassMatch) {
         // Safely update Last Login & Login Count if columns exist

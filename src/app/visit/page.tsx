@@ -424,7 +424,7 @@ function VisitContent() {
                   {filteredEmployees.map(function (emp) {
                     return (
                       <button key={emp.email} type="button" className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 transition-colors"
-                        onClick={function () { handleEmailSelect(emp.email); }}>
+                        onMouseDown={function (e) { e.preventDefault(); handleEmailSelect(emp.email); }}>
                         <span className="font-semibold text-gray-900">{emp.employeeName}</span>
                         <span className="text-gray-500 ml-2 text-xs">{emp.email}</span>
                       </button>
@@ -452,8 +452,7 @@ function VisitContent() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input placeholder="Search by Code, Name, Phone..." className="pl-9 h-10 rounded-xl" value={customerSearch} autoComplete="off"
                   onChange={function (e) { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
-                  onFocus={function (e) { setShowCustomerDropdown(true); e.target.select(); }}
-                  onBlur={function () { setTimeout(function () { setShowCustomerDropdown(false); }, 150); }} />
+                  onFocus={function (e) { setShowCustomerDropdown(true); e.target.select(); }} />
               </div>
               {showCustomerDropdown && (
                 <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
@@ -461,7 +460,7 @@ function VisitContent() {
                   {filteredCustomers.slice(0, 100).map(function (c) {
                     return (
                       <button key={c.customerId} type="button" className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b border-gray-50 last:border-0 transition-colors"
-                        onClick={function () { handleCustomerSelect(c); }}>
+                        onMouseDown={function (e) { e.preventDefault(); handleCustomerSelect(c); }}>
                         <span className="font-bold text-blue-600">{c.customerId}</span>
                         <span className="text-gray-700 font-medium ml-2">{c.shopName}</span>
                         <br />
