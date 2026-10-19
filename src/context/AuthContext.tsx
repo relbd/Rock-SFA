@@ -95,7 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = async (email: string, password: string) => {
-    const res = await api.login(email, password);
+    const cleanEmail = String(email || "").trim();
+    const cleanPass = String(password || "").trim();
+    const res = await api.login(cleanEmail, cleanPass);
     if (res.success && res.user) {
       const userWithTs = { ...res.user, _loginTs: Date.now() };
       setUser(userWithTs as unknown as AuthUser);

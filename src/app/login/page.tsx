@@ -29,7 +29,9 @@ export default function Login() {
     setSubmitting(true);
 
     try {
-      const res = await login(email, password);
+      const cleanEmail = email.trim();
+      const cleanPass = password.trim();
+      const res = await login(cleanEmail, cleanPass);
       if (res.success) {
         router.push("/");
       } else {

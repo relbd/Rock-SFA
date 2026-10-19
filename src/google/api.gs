@@ -122,9 +122,9 @@ function handleLogin(data) {
     return createResponse({ success: false, message: "Email column header not found in sheet" }, 500);
   }
 
-  // Clean and normalize input email and password
-  var inputEmail = String(data.email || data.userId || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
-  var inputPass = String(data.password || "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
+  // Clean and normalize input email/userId and password
+  var inputEmail = String(data.email || data.userId || "").replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]+/g, "").toLowerCase();
+  var inputPass = String(data.password || "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
 
   if (!inputEmail || !inputPass) {
     return createResponse({ success: false, message: "Email and password are required" }, 400);
@@ -134,15 +134,25 @@ function handleLogin(data) {
     var dRow = displayValues[i];
     var rRow = rawValues[i];
 
-    // Read cell email (try display value first, fallback to raw value) and clean hidden spaces/NBSP
+    // Read cell email, user ID, and employee code (clean invisible unicode and hidden spaces)
     var rawCellEmail = dRow[emailCol] !== "" ? dRow[emailCol] : String(rRow[emailCol] || "");
-    var cellEmail = String(rawCellEmail).replace(/[\s\u00A0]+/g, "").toLowerCase();
+    var cellEmail = String(rawCellEmail).replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]+/g, "").toLowerCase();
 
-    // Strictly match by Email
-    if (cellEmail && cellEmail === inputEmail) {
+    var rawCellUserId = userIdCol !== -1 ? (dRow[userIdCol] !== "" ? dRow[userIdCol] : String(rRow[userIdCol] || "")) : "";
+    var cellUserId = String(rawCellUserId).replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]+/g, "").toLowerCase();
+
+    var rawCellEmpCode = empCodeCol !== -1 ? (dRow[empCodeCol] !== "" ? dRow[empCodeCol] : String(rRow[empCodeCol] || "")) : "";
+    var cellEmpCode = String(rawCellEmpCode).replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]+/g, "").toLowerCase();
+
+    // Match by Email, User ID, or Employee Code
+    var isUserMatch = (cellEmail && cellEmail === inputEmail) ||
+                      (cellUserId && cellUserId === inputEmail) ||
+                      (cellEmpCode && cellEmpCode === inputEmail);
+
+    if (isUserMatch) {
       // Check Active Status
       var rawStatus = statusCol !== -1 ? (dRow[statusCol] !== "" ? dRow[statusCol] : String(rRow[statusCol] || "")) : "";
-      var cellStatus = String(rawStatus).replace(/[\s\u00A0]+/g, " ").trim().toLowerCase();
+      var cellStatus = String(rawStatus).replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]+/g, " ").trim().toLowerCase();
 
       var isActive = (statusCol === -1) ||
                      cellStatus === "" ||
@@ -156,11 +166,16 @@ function handleLogin(data) {
         return createResponse({ success: false, message: "User account is inactive or disabled" }, 401);
       }
 
-      // Check Password against both display value and raw value (handles numeric password cells e.g. 123456)
-      var cellPassDisplay = String(dRow[passCol] !== undefined ? dRow[passCol] : "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
-      var cellPassRaw = String(rRow[passCol] !== undefined ? rRow[passCol] : "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
+      // Check Password against both display value and raw value (handles numeric formatting e.g. 320,203 or 320203)
+      var cellPassDisplay = String(dRow[passCol] !== undefined ? dRow[passCol] : "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
+      var cellPassRaw = String(rRow[passCol] !== undefined ? rRow[passCol] : "").replace(/^[\s\u00A0\u200B\u200C\u200D\uFEFF]+|[\s\u00A0\u200B\u200C\u200D\uFEFF]+$/g, "");
 
-      if (cellPassDisplay === inputPass || cellPassRaw === inputPass) {
+      var isPassMatch = (cellPassDisplay === inputPass || cellPassRaw === inputPass ||
+                         cellPassDisplay.replace(/,/g, "") === inputPass ||
+                         cellPassDisplay.replace(/[\s\u00A0]+/g, "") === inputPass ||
+                         String(Number(cellPassRaw)) === inputPass);
+
+      if (isPassMatch) {
         // Safely update Last Login & Login Count if columns exist
         try {
           if (lastLoginCol !== -1) {
