@@ -1,8 +1,9 @@
-const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbzwEOVKcH_FWTtHsD0Hm1ktlhYQVp9Ic01cuZiJ5lFtZ8WQdKDuxBV9sRdOPe89mloQ/exec";
+const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbxw8id1ZyPAvmHYfChICgmHDTsDaR5e-hYqaf5aH6ciq4zlZUWg1JNT2GtcmsTS-_Al/exec";
 const API_URL = (process.env.NEXT_PUBLIC_API_URL && 
   !process.env.NEXT_PUBLIC_API_URL.includes("AKfycbySHcMi") && 
   !process.env.NEXT_PUBLIC_API_URL.includes("AKfycbxAhZDJ") && 
-  !process.env.NEXT_PUBLIC_API_URL.includes("AKfycbz0IYOw"))
+  !process.env.NEXT_PUBLIC_API_URL.includes("AKfycbz0IYOw") &&
+  !process.env.NEXT_PUBLIC_API_URL.includes("AKfycbzwEOVK"))
   ? process.env.NEXT_PUBLIC_API_URL
   : DEPLOYMENT_URL;
 
