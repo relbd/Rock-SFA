@@ -2,11 +2,11 @@
 // Google Apps Script - Rock SFA Backend API
 // ==========================================
 // Admin Sheet (auth, master data):
-//   https://docs.google.com/spreadsheets/d/1Efx94MHnij8ZvTcJlZJD0ciighfOOHxOueBPhW6x62Y
+// https://docs.google.com/spreadsheets/d/1Efx94MHnij8ZvTcJlZJD0ciighfOOHxOueBPhW6x62Y
 // Customer_Master Sheet (registrations):
-//   https://docs.google.com/spreadsheets/d/1FlAtsR85aCVUfCukQvw7CAj9xRNJmu92HD3uJksjEyc
+// https://docs.google.com/spreadsheets/d/1FlAtsR85aCVUfCukQvw7CAj9xRNJmu92HD3uJksjEyc
 // Visit Master Data Sheet (visits):
-//   https://docs.google.com/spreadsheets/d/1D26HcB3xCZQUx2HmnnUElZBjGRfGEhdOQaI_oC3bq-c
+// https://docs.google.com/spreadsheets/d/1D26HcB3xCZQUx2HmnnUElZBjGRfGEhdOQaI_oC3bq-c
 // ==========================================
 
 var ADMIN_SHEET_ID = "1Efx94MHnij8ZvTcJlZJD0ciighfOOHxOueBPhW6x62Y";
@@ -16,6 +16,7 @@ try {
     ADMIN_SHEET_ID = _activeSs.getId();
   }
 } catch (e) {}
+
 var CUSTOMER_SHEET_ID = "1FlAtsR85aCVUfCukQvw7CAj9xRNJmu92HD3uJksjEyc";
 var VISIT_SHEET_ID = "1D26HcB3xCZQUx2HmnnUElZBjGRfGEhdOQaI_oC3bq-c";
 var ORDERS_SHEET_ID = "1GayuEL4PtXWUib2Nccrp5WpeHtQ5Aff9wBBbltFCSjY";
@@ -86,178 +87,144 @@ function doGet(e) {
 // ==========================================
 
 function handleLogin(data) {
-  var ss;
-  try {
-    ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
-  } catch (e) {
-    try {
-      ss = SpreadsheetApp.getActiveSpreadsheet();
-    } catch (e2) {}
-  }
-
-  if (!ss) {
-    return createResponse({ success: false, message: "Admin spreadsheet could not be opened" }, 500);
-  }
-
-  var sheet = ss.getSheetByName("EMP");
+  var sheet = SpreadsheetApp.openById(ADMIN_SHEET_ID).getSheetByName("EMP");
   if (!sheet) {
     return createResponse({ success: false, message: "EMP sheet tab not found" }, 404);
   }
 
-  var numRows = sheet.getLastRow();
-  var numCols = Math.max(sheet.getLastColumn(), 15);
-  if (numRows < 2) {
+  // Fetch both display values (formatted text as visible in UI) and raw values
+  var displayValues = sheet.getDataRange().getDisplayValues();
+  var rawValues = sheet.getDataRange().getValues();
+  if (!displayValues || displayValues.length < 2) {
     return createResponse({ success: false, message: "No employee data found in sheet" }, 404);
   }
 
-  // Fetch full range covering all rows down to the very last one
-  var displayValues = sheet.getRange(1, 1, numRows, numCols).getDisplayValues();
-  var rawValues = sheet.getRange(1, 1, numRows, numCols).getValues();
-
   var headers = displayValues[0];
+
+  // Build normalized header lookup map (lowercased, stripped of NBSP \u00A0 and extra spaces)
   var colMap = {};
   for (var h = 0; h < headers.length; h++) {
-    var cleanH = String(headers[h] || "").replace(/[\s\u00A0]+/g, " ").trim().toLowerCase();
-    if (cleanH) colMap[cleanH] = h;
+    var cleanHeader = String(headers[h] || "").replace(/[\s\u00A0]+/g, " ").trim().toLowerCase();
+    if (cleanHeader) colMap[cleanHeader] = h;
   }
 
-  function findCol(aliases, defaultCol) {
+  // Flexible column finder by alias list
+  function findCol(aliases) {
     for (var a = 0; a < aliases.length; a++) {
       var key = aliases[a].toLowerCase();
       if (colMap[key] !== undefined) return colMap[key];
     }
-    return defaultCol !== undefined ? defaultCol : -1;
+    return -1;
   }
 
-  // Column definitions with reliable fallbacks:
-  // Column B (index 1) = Email
-  // Column C (index 2) = Password Hash (raw password)
-  // Column M (index 12) = Active Status
-  var emailCol = findCol(["email", "email address", "e-mail", "mail", "user email"], 1);
-  var passCol = findCol(["password hash", "password", "passwordhash", "pass", "pwd"], 2);
-  var statusCol = findCol(["active status", "status", "activestatus", "active", "user status"], 12);
-  var userIdCol = findCol(["user id", "userid", "id"], 0);
-  var empCodeCol = findCol(["employee code", "emp code", "employeecode", "code"], 4);
-  var lastLoginCol = findCol(["last login", "lastlogin"], -1);
+  var emailCol = findCol(["email", "email address", "e-mail", "mail", "user email"]);
+  if (emailCol === -1) emailCol = 1; // Fallback to Column B
 
-  function cleanStr(val) {
-    if (val === null || val === undefined) return "";
-    return String(val).replace(/[\s\u00A0\u200B\u200C\u200D\uFEFF]+/g, " ").trim();
-  }
+  var passCol = findCol(["password hash", "password", "passwordhash", "pass", "pwd"]);
+  if (passCol === -1) passCol = 2; // Fallback to Column C
 
-  var inputEmail = cleanStr(data.email || data.userId || "").toLowerCase().replace(/ /g, "");
-  var inputPass = cleanStr(data.password || "");
+  var statusCol = findCol(["active status", "status", "activestatus", "active", "user status"]);
+  if (statusCol === -1) statusCol = 12; // Fallback to Column M
+
+  var userIdCol = findCol(["user id", "userid", "user id ", "id"]);
+  var empCodeCol = findCol(["employee code", "emp code", "employeecode", "code"]);
+  var lastLoginCol = findCol(["last login", "lastlogin"]);
+  var loginCountCol = findCol(["login count", "logincount"]);
+
+  // Clean and normalize input email and password
+  var inputEmail = String(data.email || data.userId || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
+  var inputPass = String(data.password || "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
 
   if (!inputEmail || !inputPass) {
     return createResponse({ success: false, message: "Email and password are required" }, 400);
   }
 
-  for (var i = 1; i < numRows; i++) {
+  for (var i = 1; i < displayValues.length; i++) {
     var dRow = displayValues[i];
     var rRow = rawValues[i];
-    if (!dRow || !rRow) continue;
 
-    // Email check (Column B / index 1 or found emailCol)
-    var cellEmail = cleanStr(dRow[emailCol] !== "" ? dRow[emailCol] : rRow[emailCol]).toLowerCase().replace(/ /g, "");
-    var colBEmail = cleanStr(dRow[1] !== "" ? dRow[1] : rRow[1]).toLowerCase().replace(/ /g, "");
+    // Read cell email (try display value first, fallback to raw value) and clean hidden spaces/NBSP
+    var rawCellEmail = dRow[emailCol] !== "" ? dRow[emailCol] : String(rRow[emailCol] || "");
+    var cellEmail = String(rawCellEmail).replace(/[\s\u00A0]+/g, "").toLowerCase();
 
-    // User ID / Employee Code check
-    var cellUserId = cleanStr(userIdCol !== -1 ? (dRow[userIdCol] !== "" ? dRow[userIdCol] : rRow[userIdCol]) : dRow[0]).toLowerCase().replace(/ /g, "");
-    var cellEmpCode = cleanStr(empCodeCol !== -1 ? (dRow[empCodeCol] !== "" ? dRow[empCodeCol] : rRow[empCodeCol]) : dRow[4]).toLowerCase().replace(/ /g, "");
+    // Also support User ID and Employee Code matching
+    var rawCellUserId = userIdCol !== -1 ? (dRow[userIdCol] !== "" ? dRow[userIdCol] : String(rRow[userIdCol] || "")) : "";
+    var cellUserId = String(rawCellUserId).replace(/[\s\u00A0]+/g, "").toLowerCase();
+
+    var rawCellEmpCode = empCodeCol !== -1 ? (dRow[empCodeCol] !== "" ? dRow[empCodeCol] : String(rRow[empCodeCol] || "")) : "";
+    var cellEmpCode = String(rawCellEmpCode).replace(/[\s\u00A0]+/g, "").toLowerCase();
 
     var isUserMatch = (
       (cellEmail && cellEmail === inputEmail) ||
-      (colBEmail && colBEmail === inputEmail) ||
       (cellUserId && cellUserId === inputEmail) ||
       (cellEmpCode && cellEmpCode === inputEmail)
     );
 
     if (isUserMatch) {
-      // Check Active Status in Column M (index 12) or statusCol
-      var rawStatus = statusCol !== -1 ? (dRow[statusCol] !== "" ? dRow[statusCol] : rRow[statusCol]) : (dRow[12] !== "" ? dRow[12] : rRow[12]);
-      var cellStatus = cleanStr(rawStatus).toLowerCase();
+      // Check Active Status
+      var rawStatus = statusCol !== -1 ? (dRow[statusCol] !== "" ? dRow[statusCol] : String(rRow[statusCol] || "")) : "";
+      var cellStatus = String(rawStatus).replace(/[\s\u00A0]+/g, " ").trim().toLowerCase();
 
-      // IF Active then login, if not active then not login
-      var isActive = (cellStatus === "active" || cellStatus === "");
+      var isActive = (statusCol === -1) ||
+        cellStatus === "" ||
+        cellStatus === "active" ||
+        cellStatus === "true" ||
+        cellStatus === "yes" ||
+        cellStatus === "1" ||
+        cellStatus === "enabled";
+
       if (!isActive) {
         return createResponse({ success: false, message: "User account is inactive or disabled" }, 401);
       }
 
-      // Check Password in Column C (index 2) or passCol
-      var passCandidates = [
-        cleanStr(dRow[2]),
-        cleanStr(rRow[2]),
-        passCol !== -1 ? cleanStr(dRow[passCol]) : "",
-        passCol !== -1 ? cleanStr(rRow[passCol]) : ""
-      ];
+      // Check Password against both display value and raw value (handles numeric password cells e.g. 123456)
+      var cellPassDisplay = String(dRow[passCol] !== undefined ? dRow[passCol] : "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
+      var cellPassRaw = String(rRow[passCol] !== undefined ? rRow[passCol] : "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
 
-      var isPassMatch = false;
-      for (var c = 0; c < passCandidates.length; c++) {
-        var cand = passCandidates[c];
-        if (!cand) continue;
-
-        // 1. Direct match
-        if (cand === inputPass) {
-          isPassMatch = true;
-          break;
-        }
-
-        // 2. Strip commas, periods, spaces (e.g. "320,203" -> "320203")
-        var candStripped = cand.replace(/[,\s.]/g, "");
-        var inputStripped = inputPass.replace(/[,\s.]/g, "");
-        if (candStripped && candStripped === inputStripped) {
-          isPassMatch = true;
-          break;
-        }
-
-        // 3. Numeric comparison
-        if (!isNaN(Number(candStripped)) && !isNaN(Number(inputStripped)) && inputStripped !== "") {
-          if (Number(candStripped) === Number(inputStripped)) {
-            isPassMatch = true;
-            break;
-          }
-        }
-
-        // 4. Case-insensitive alphanumeric strip
-        var candAlpha = cand.toLowerCase().replace(/[^a-z0-9]/g, "");
-        var inputAlpha = inputPass.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (candAlpha && candAlpha === inputAlpha) {
-          isPassMatch = true;
-          break;
-        }
-      }
+      var isPassMatch = (
+        cellPassDisplay === inputPass ||
+        cellPassRaw === inputPass ||
+        cellPassDisplay.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "") ||
+        cellPassRaw.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "")
+      );
 
       if (isPassMatch) {
-        // Safely update last login if column exists
+        // Safely update Last Login & Login Count if columns exist
         try {
           if (lastLoginCol !== -1) {
             sheet.getRange(i + 1, lastLoginCol + 1).setValue(new Date());
           }
-        } catch (e) {}
+          if (loginCountCol !== -1) {
+            var currentCount = Number(rRow[loginCountCol]) || 0;
+            sheet.getRange(i + 1, loginCountCol + 1).setValue(currentCount + 1);
+          }
+        } catch (err) {
+          // Ignore non-critical write errors
+        }
 
-        function getFieldValue(colIdx, defaultIdx, defaultVal) {
-          var idx = colIdx !== -1 ? colIdx : defaultIdx;
-          if (idx < 0 || idx >= dRow.length) return defaultVal || "";
-          var val = dRow[idx] !== "" && dRow[idx] !== undefined ? dRow[idx] : rRow[idx];
-          return val !== undefined && val !== null ? cleanStr(val) : (defaultVal || "");
+        // Helper to get string value for profile fields
+        function getFieldValue(colIdx) {
+          if (colIdx === -1) return "";
+          var val = dRow[colIdx] !== "" ? dRow[colIdx] : String(rRow[colIdx] || "");
+          return String(val).replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
         }
 
         return createResponse({
           success: true,
           user: {
-            userId: getFieldValue(userIdCol, 0, cellEmail),
-            email: getFieldValue(emailCol, 1, colBEmail || inputEmail),
-            employeeName: getFieldValue(findCol(["employee name", "name", "emp name", "full name"]), 3, ""),
-            employeeCode: getFieldValue(empCodeCol, 4, ""),
-            position: getFieldValue(findCol(["position", "designation", "role"]), 5, "SO"),
-            department: getFieldValue(findCol(["department", "dept"]), 6, ""),
-            territory: getFieldValue(findCol(["territory"]), 7, ""),
-            area: getFieldValue(findCol(["area"]), 8, ""),
-            district: getFieldValue(findCol(["district", "city"]), 9, ""),
-            phone: getFieldValue(findCol(["phone", "mobile", "contact"]), 10, ""),
-            reportingManager: getFieldValue(findCol(["reporting manager", "manager"]), 11, ""),
-            activeStatus: getFieldValue(statusCol, 12, "Active") || "Active",
-            profilePhotoUrl: getFieldValue(findCol(["profile photo url", "photo", "image", "photo url"]), -1, "")
+            userId: getFieldValue(userIdCol) || cellEmail,
+            email: getFieldValue(emailCol) || inputEmail,
+            employeeName: getFieldValue(findCol(["employee name", "name", "emp name", "full name"])),
+            employeeCode: getFieldValue(empCodeCol),
+            position: getFieldValue(findCol(["position", "designation", "role"])),
+            department: getFieldValue(findCol(["department", "dept"])),
+            territory: getFieldValue(findCol(["territory"])),
+            area: getFieldValue(findCol(["area"])),
+            district: getFieldValue(findCol(["district", "city"])),
+            phone: getFieldValue(findCol(["phone", "mobile", "contact", "phone number"])),
+            reportingManager: getFieldValue(findCol(["reporting manager", "manager"])),
+            activeStatus: getFieldValue(statusCol) || "Active",
+            profilePhotoUrl: getFieldValue(findCol(["profile photo url", "photo", "image", "photo url"]))
           }
         });
       }
@@ -276,14 +243,15 @@ function getMasterData() {
 
   // Territory tab → District / Area / Territory mapping
   var tSheet = ss.getSheetByName("Territory");
+  var districts = [];
+  var seenDistricts = {};
+  var areas = [];
+  var territories = [];
+
   if (tSheet) {
     var tData = tSheet.getDataRange().getValues();
     var tHeaders = tData[0] || [];
     var tCol = toMap(tHeaders);
-    var districts = [];
-    var seenDistricts = {};
-    var areas = [];
-    var territories = [];
 
     for (var i = 1; i < tData.length; i++) {
       var r = tData[i];
@@ -777,50 +745,19 @@ function handleSubmitVisit(data) {
 // DASHBOARD DATA
 // ==========================================
 
-// Helper: Robust check if a date cell matches target Date in Asia/Dhaka
+// Helper: Robust check if a date cell matches target Date
 function isSameDateDhaka(cellVal, targetDateObj) {
   if (!cellVal) return false;
-  if (!targetDateObj) targetDateObj = new Date();
-
   var targetStr = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd-MMM-yyyy");
   var targetIso = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "yyyy-MM-dd");
-  var targetDmySlash = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd/MM/yyyy");
-  var targetDmyDash = Utilities.formatDate(targetDateObj, "Asia/Dhaka", "dd-MM-yyyy");
 
   if (cellVal instanceof Date) {
     return Utilities.formatDate(cellVal, "Asia/Dhaka", "dd-MMM-yyyy") === targetStr;
   }
-  
+
   var s = String(cellVal).trim();
   if (!s) return false;
-  var sLower = s.toLowerCase();
-
-  if (sLower === targetStr.toLowerCase() ||
-      sLower === targetIso.toLowerCase() ||
-      sLower === targetDmySlash.toLowerCase() ||
-      sLower === targetDmyDash.toLowerCase()) {
-    return true;
-  }
-
-  if (sLower.indexOf(targetStr.toLowerCase()) !== -1 ||
-      sLower.indexOf(targetIso.toLowerCase()) !== -1 ||
-      sLower.indexOf(targetDmySlash.toLowerCase()) !== -1 ||
-      sLower.indexOf(targetDmyDash.toLowerCase()) !== -1) {
-    return true;
-  }
-
-  var match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (match) {
-    var d = parseInt(match[1], 10);
-    var m = parseInt(match[2], 10);
-    var y = parseInt(match[3], 10);
-    var targetD = parseInt(Utilities.formatDate(targetDateObj, "Asia/Dhaka", "d"), 10);
-    var targetM = parseInt(Utilities.formatDate(targetDateObj, "Asia/Dhaka", "M"), 10);
-    var targetY = parseInt(Utilities.formatDate(targetDateObj, "Asia/Dhaka", "yyyy"), 10);
-    if (d === targetD && m === targetM && y === targetY) {
-      return true;
-    }
-  }
+  if (s === targetStr || s.indexOf(targetStr) !== -1 || s.indexOf(targetIso) !== -1) return true;
 
   var parsed = new Date(s);
   if (!isNaN(parsed.getTime())) {
@@ -830,94 +767,22 @@ function isSameDateDhaka(cellVal, targetDateObj) {
   return false;
 }
 
-// Helper: Efficiently fetch all rows of TODAY without timeouts or missing morning rows
-function getTodaySheetValues(sheet, preferredColNames, fallbackLimit) {
+// Helper: Efficiently fetch header + last N rows of a sheet to avoid 30s Apps Script timeouts
+function getRecentSheetValues(sheet, maxRowsToScan) {
   if (!sheet) return { headers: [], data: [] };
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
   if (lastRow < 1 || lastCol < 1) return { headers: [], data: [] };
-  
+
   var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   if (lastRow < 2) return { headers: headers, data: [] };
 
-  // If sheet is relatively small (<= 2000 rows), read all rows safely
-  if (lastRow <= 2000) {
-    var allRows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-    return { headers: headers, data: allRows };
-  }
-
-  var minScan = fallbackLimit || 3500;
-  var colMap = toMap(headers);
-  var nowObj = new Date();
-  
-  // Find date or timestamp column index (1-based for getRange)
-  var targetColIdx = -1;
-  var names = preferredColNames || ["Date", "Timestamp", "Created At"];
-  for (var i = 0; i < names.length; i++) {
-    var key = names[i].toLowerCase();
-    for (var hKey in colMap) {
-      if (hKey === key || hKey.indexOf(key) !== -1) {
-        targetColIdx = colMap[hKey] + 1; // 1-based
-        break;
-      }
-    }
-    if (targetColIdx !== -1) break;
-  }
-
-  var startRow = Math.max(2, lastRow - minScan + 1);
-
-  // If target column found, scan single column from bottom-up in chunks to find exact start of today
-  if (targetColIdx !== -1) {
-    var chunkSize = 3000;
-    var currentEnd = lastRow;
-    var foundEarliestRow = -1;
-
-    while (currentEnd >= 2) {
-      var chunkStart = Math.max(2, currentEnd - chunkSize + 1);
-      var chunkLen = currentEnd - chunkStart + 1;
-      var colVals = sheet.getRange(chunkStart, targetColIdx, chunkLen, 1).getValues();
-
-      var foundInChunk = false;
-      var reachedPast = false;
-      var streakNonToday = 0;
-
-      for (var c = colVals.length - 1; c >= 0; c--) {
-        if (isSameDateDhaka(colVals[c][0], nowObj)) {
-          foundEarliestRow = chunkStart + c;
-          foundInChunk = true;
-          streakNonToday = 0;
-        } else if (foundEarliestRow !== -1) {
-          streakNonToday++;
-          if (streakNonToday >= 25) {
-            reachedPast = true;
-            break;
-          }
-        }
-      }
-
-      if (reachedPast) {
-        break;
-      }
-      if (!foundInChunk && foundEarliestRow === -1) {
-        break;
-      }
-      currentEnd = chunkStart - 1;
-    }
-
-    if (foundEarliestRow !== -1) {
-      // Add safety buffer of 50 rows before the first today visit
-      startRow = Math.max(2, foundEarliestRow - 50);
-    }
-  }
-
+  var limit = maxRowsToScan || 5000;
+  var startRow = Math.max(2, lastRow - limit + 1);
   var numRows = lastRow - startRow + 1;
+
   var rows = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
   return { headers: headers, data: rows };
-}
-
-// Keep getRecentSheetValues as a backward-compatible wrapper with higher default limit
-function getRecentSheetValues(sheet, maxRowsToScan) {
-  return getTodaySheetValues(sheet, ["Date", "Timestamp", "Created At"], maxRowsToScan || 3500);
 }
 
 function getDashboardData(data) {
@@ -929,12 +794,12 @@ function getDashboardData(data) {
   var nowObj = new Date();
   var today = Utilities.formatDate(nowObj, "Asia/Dhaka", "dd-MMM-yyyy");
 
-  // --- Visits today for this user (scans all rows of today) ---
+  // --- Visits today for this user (scans up to 5000 rows so morning visits never disappear) ---
   var visits = [];
   try {
     var vss = SpreadsheetApp.openById(VISIT_SHEET_ID);
     var vSheet = vss.getSheets()[0];
-    var vRecent = getTodaySheetValues(vSheet, ["Date", "Timestamp"], 3500);
+    var vRecent = getRecentSheetValues(vSheet, 5000);
     var vData = vRecent.data;
     var vCol = toMap(vRecent.headers);
 
@@ -967,13 +832,13 @@ function getDashboardData(data) {
     }
   } catch (e) { /* visit sheet not found */ }
 
-  // --- Orders today for this user (scans all rows of today) ---
+  // --- Orders today for this user (scans up to 5000 rows) ---
   var orders = [];
   var totalOrderQty = 0;
   try {
     var oss = SpreadsheetApp.openById(ORDERS_SHEET_ID);
     var oSheet = oss.getSheetByName("Sec Orders");
-    var oRecent = getTodaySheetValues(oSheet, ["Created At", "Timestamp"], 3500);
+    var oRecent = getRecentSheetValues(oSheet, 5000);
     var oData = oRecent.data;
     var oCol = toMap(oRecent.headers);
 
@@ -999,14 +864,14 @@ function getDashboardData(data) {
     }
   } catch (e) { /* orders sheet not found */ }
 
-  // --- Attendance today (scans all rows of today) ---
+  // --- Attendance today (scans up to 5000 rows) ---
   var clockIn = "";
   var clockOut = "";
   try {
     var lss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
     var lSheet = lss.getSheetByName("Logs");
     if (lSheet) {
-      var lRecent = getTodaySheetValues(lSheet, ["Timestamp"], 3500);
+      var lRecent = getRecentSheetValues(lSheet, 5000);
       var lData = lRecent.data;
       for (var k = 0; k < lData.length; k++) {
         var lr = lData[k];
@@ -1015,7 +880,7 @@ function getDashboardData(data) {
 
         var lType = String(lr[2] || "").trim();
         var lTs = lr[3];
-        
+
         if (isSameDateDhaka(lTs, nowObj)) {
           if (lType === "Clock In" && !clockIn) clockIn = lTs instanceof Date ? lTs.toISOString() : String(lTs);
           if (lType === "Clock Out") clockOut = lTs instanceof Date ? lTs.toISOString() : String(lTs);
@@ -1374,8 +1239,8 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   var dLat = (lat2 - lat1) * Math.PI / 180;
   var dLng = (lng2 - lng1) * Math.PI / 180;
   var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
   var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
