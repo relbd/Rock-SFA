@@ -100,40 +100,19 @@ function handleLogin(data) {
   }
 
   var headers = displayValues[0];
+  var emailCol = 1;  // Column B default
+  var passCol = 2;   // Column C default
+  var statusCol = 12; // Column M default
 
-  // Build normalized header lookup map (lowercased, stripped of NBSP \u00A0 and extra spaces)
-  var colMap = {};
   for (var h = 0; h < headers.length; h++) {
-    var cleanHeader = String(headers[h] || "").replace(/[\s\u00A0]+/g, " ").trim().toLowerCase();
-    if (cleanHeader) colMap[cleanHeader] = h;
+    var hName = String(headers[h] || "").trim().toLowerCase();
+    if (hName === "email" || hName === "email address") emailCol = h;
+    if (hName === "password hash" || hName === "password") passCol = h;
+    if (hName === "active status" || hName === "status") statusCol = h;
   }
 
-  // Flexible column finder by alias list
-  function findCol(aliases) {
-    for (var a = 0; a < aliases.length; a++) {
-      var key = aliases[a].toLowerCase();
-      if (colMap[key] !== undefined) return colMap[key];
-    }
-    return -1;
-  }
-
-  var emailCol = findCol(["email", "email address", "e-mail", "mail", "user email"]);
-  if (emailCol === -1) emailCol = 1; // Fallback to Column B
-
-  var passCol = findCol(["password hash", "password", "passwordhash", "pass", "pwd"]);
-  if (passCol === -1) passCol = 2; // Fallback to Column C
-
-  var statusCol = findCol(["active status", "status", "activestatus", "active", "user status"]);
-  if (statusCol === -1) statusCol = 12; // Fallback to Column M
-
-  var userIdCol = findCol(["user id", "userid", "user id ", "id"]);
-  var empCodeCol = findCol(["employee code", "emp code", "employeecode", "code"]);
-  var lastLoginCol = findCol(["last login", "lastlogin"]);
-  var loginCountCol = findCol(["login count", "logincount"]);
-
-  // Clean and normalize input email and password
-  var inputEmail = String(data.email || data.userId || "").replace(/[\s\u00A0]+/g, "").toLowerCase();
-  var inputPass = String(data.password || "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
+  var inputEmail = String(data.email || "").trim().toLowerCase();
+  var inputPass = String(data.password || "");
 
   if (!inputEmail || !inputPass) {
     return createResponse({ success: false, message: "Email and password are required" }, 400);
@@ -143,88 +122,56 @@ function handleLogin(data) {
     var dRow = displayValues[i];
     var rRow = rawValues[i];
 
-    // Read cell email (try display value first, fallback to raw value) and clean hidden spaces/NBSP
-    var rawCellEmail = dRow[emailCol] !== "" ? dRow[emailCol] : String(rRow[emailCol] || "");
-    var cellEmail = String(rawCellEmail).replace(/[\s\u00A0]+/g, "").toLowerCase();
+    // Column B (index 1) or found emailCol
+    var rawEmail = String(dRow[emailCol] !== "" ? dRow[emailCol] : (rRow[emailCol] || "")).trim().toLowerCase();
+    var colBEmail = String(dRow[1] !== "" ? dRow[1] : (rRow[1] || "")).trim().toLowerCase();
 
-    // Also support User ID and Employee Code matching
-    var rawCellUserId = userIdCol !== -1 ? (dRow[userIdCol] !== "" ? dRow[userIdCol] : String(rRow[userIdCol] || "")) : "";
-    var cellUserId = String(rawCellUserId).replace(/[\s\u00A0]+/g, "").toLowerCase();
-
-    var rawCellEmpCode = empCodeCol !== -1 ? (dRow[empCodeCol] !== "" ? dRow[empCodeCol] : String(rRow[empCodeCol] || "")) : "";
-    var cellEmpCode = String(rawCellEmpCode).replace(/[\s\u00A0]+/g, "").toLowerCase();
-
-    var isUserMatch = (
-      (cellEmail && cellEmail === inputEmail) ||
-      (cellUserId && cellUserId === inputEmail) ||
-      (cellEmpCode && cellEmpCode === inputEmail)
-    );
-
-    if (isUserMatch) {
-      // Check Active Status
-      var rawStatus = statusCol !== -1 ? (dRow[statusCol] !== "" ? dRow[statusCol] : String(rRow[statusCol] || "")) : "";
-      var cellStatus = String(rawStatus).replace(/[\s\u00A0]+/g, " ").trim().toLowerCase();
-
-      var isActive = (statusCol === -1) ||
-        cellStatus === "" ||
-        cellStatus === "active" ||
-        cellStatus === "true" ||
-        cellStatus === "yes" ||
-        cellStatus === "1" ||
-        cellStatus === "enabled";
-
-      if (!isActive) {
+    if (rawEmail === inputEmail || colBEmail === inputEmail) {
+      // Column M (index 12) or found statusCol: Active Status
+      var rawStatus = String(dRow[statusCol] !== "" ? dRow[statusCol] : (rRow[statusCol] || dRow[12] || rRow[12] || "")).trim();
+      if (rawStatus !== "Active" && rawStatus.toLowerCase() !== "active") {
         return createResponse({ success: false, message: "User account is inactive or disabled" }, 401);
       }
 
-      // Check Password against both display value and raw value (handles numeric password cells e.g. 123456)
-      var cellPassDisplay = String(dRow[passCol] !== undefined ? dRow[passCol] : "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
-      var cellPassRaw = String(rRow[passCol] !== undefined ? rRow[passCol] : "").replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
+      // Column C (index 2) or found passCol: Password (raw and case sensitive)
+      var p1 = String(dRow[passCol] !== undefined && dRow[passCol] !== null ? dRow[passCol] : "");
+      var p2 = String(rRow[passCol] !== undefined && rRow[passCol] !== null ? rRow[passCol] : "");
+      var p3 = String(dRow[2] !== undefined && dRow[2] !== null ? dRow[2] : "");
+      var p4 = String(rRow[2] !== undefined && rRow[2] !== null ? rRow[2] : "");
 
       var isPassMatch = (
-        cellPassDisplay === inputPass ||
-        cellPassRaw === inputPass ||
-        cellPassDisplay.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "") ||
-        cellPassRaw.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "")
+        p1 === inputPass || p2 === inputPass || p3 === inputPass || p4 === inputPass ||
+        p1.trim() === inputPass.trim() || p2.trim() === inputPass.trim() ||
+        p3.trim() === inputPass.trim() || p4.trim() === inputPass.trim() ||
+        p1.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "") ||
+        p2.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "") ||
+        p3.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "") ||
+        p4.replace(/[,\s.]/g, "") === inputPass.replace(/[,\s.]/g, "")
       );
 
       if (isPassMatch) {
-        // Safely update Last Login & Login Count if columns exist
-        try {
-          if (lastLoginCol !== -1) {
-            sheet.getRange(i + 1, lastLoginCol + 1).setValue(new Date());
-          }
-          if (loginCountCol !== -1) {
-            var currentCount = Number(rRow[loginCountCol]) || 0;
-            sheet.getRange(i + 1, loginCountCol + 1).setValue(currentCount + 1);
-          }
-        } catch (err) {
-          // Ignore non-critical write errors
-        }
-
-        // Helper to get string value for profile fields
-        function getFieldValue(colIdx) {
-          if (colIdx === -1) return "";
-          var val = dRow[colIdx] !== "" ? dRow[colIdx] : String(rRow[colIdx] || "");
-          return String(val).replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, "");
+        function getField(idx, defaultVal) {
+          if (idx < 0 || idx >= dRow.length) return defaultVal || "";
+          var v = dRow[idx] !== "" && dRow[idx] !== undefined ? dRow[idx] : rRow[idx];
+          return v !== undefined && v !== null ? String(v).trim() : (defaultVal || "");
         }
 
         return createResponse({
           success: true,
           user: {
-            userId: getFieldValue(userIdCol) || cellEmail,
-            email: getFieldValue(emailCol) || inputEmail,
-            employeeName: getFieldValue(findCol(["employee name", "name", "emp name", "full name"])),
-            employeeCode: getFieldValue(empCodeCol),
-            position: getFieldValue(findCol(["position", "designation", "role"])),
-            department: getFieldValue(findCol(["department", "dept"])),
-            territory: getFieldValue(findCol(["territory"])),
-            area: getFieldValue(findCol(["area"])),
-            district: getFieldValue(findCol(["district", "city"])),
-            phone: getFieldValue(findCol(["phone", "mobile", "contact", "phone number"])),
-            reportingManager: getFieldValue(findCol(["reporting manager", "manager"])),
-            activeStatus: getFieldValue(statusCol) || "Active",
-            profilePhotoUrl: getFieldValue(findCol(["profile photo url", "photo", "image", "photo url"]))
+            userId: getField(0, rawEmail),
+            email: rawEmail,
+            employeeName: getField(3, ""),
+            employeeCode: getField(4, ""),
+            position: getField(5, "SO"),
+            department: getField(6, ""),
+            territory: getField(7, ""),
+            area: getField(8, ""),
+            district: getField(9, ""),
+            phone: getField(10, ""),
+            reportingManager: getField(11, ""),
+            activeStatus: "Active",
+            profilePhotoUrl: getField(13, "")
           }
         });
       }
