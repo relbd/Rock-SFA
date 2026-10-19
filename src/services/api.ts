@@ -1,4 +1,4 @@
-const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbxUpNAdatBLc8OmM0Hvd9LMhDdOvCTRAxm8V0q9QZawwtURKFFZHJw1oiAVpRBkOiE-/exec";
+const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbymId6DOyxILDB8iCiWSgQNlBxt_zK3URVx46EbJ4n9XnbfX7zuOy1bpqNw7UtGnM8k/exec";
 const API_URL = DEPLOYMENT_URL;
 
 const MAX_RETRIES = 2;
